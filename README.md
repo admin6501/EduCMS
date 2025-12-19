@@ -1,73 +1,71 @@
 # 🎓 EduCMS
 
-**EduCMS** is a **production-ready, Persian-first Learning Management System (LMS)** built with **Django** and **Docker**, designed for fast deployment, flexibility, and real-world usage.
+**EduCMS** یک سیستم مدیریت آموزش (**LMS**) آماده‌ی استفاده در محیط واقعی است که با **Django** و **Docker** توسعه داده شده و به‌صورت پیش‌فرض برای کاربران فارسی‌زبان طراحی شده است.
 
-It includes an **auto installer**, **admin panel**, **course management**, **ticketing system**, **bank transfer payments**, **discounts**, **SSL automation**, and much more — all managed through a single Bash script.
-
----
-
-## ✨ Features
-
-- 🚀 **One-line installation** (auto installer)
-- 🐳 **Docker & Docker Compose based**
-- 🔐 **Automatic SSL (Let's Encrypt)** on host
-- 🎓 Course & category management
-- 📹 Video upload (file or external link)
-- 💳 Bank transfer payment system
-- 🎟 Discount codes (percentage & fixed)
-- 🎁 First purchase discount
-- 👤 User registration & authentication
-- 🧑‍💼 Admin panel with role-based permissions
-- 🔁 Change admin URL from panel
-- 🧾 Orders & manual payment verification
-- 🎫 Ticketing system with attachments
-- 🌗 Light / Dark / System theme
-- 🖌 Editable texts, footer & navigation from admin
-- 💾 Database backup & restore (.sql)
-- 🇮🇷 Persian (Farsi) UI – RTL ready
-- 📦 Production-ready (Gunicorn + Nginx)
+این پروژه با هدف **نصب سریع، مدیریت آسان و امکانات کامل** ساخته شده و تمام مراحل راه‌اندازی، SSL، دیتابیس و سرویس‌ها را تنها با یک اسکریپت Bash انجام می‌دهد.
 
 ---
 
-## 🖥️ Live Stack Overview
+## ✨ امکانات اصلی
 
-| Layer | Technology |
-|-----|-----------|
-| Backend | Django 5 |
-| Database | MySQL 8 |
-| Web Server | Nginx |
-| App Server | Gunicorn |
-| Container | Docker |
-| SSL | Let's Encrypt (Certbot) |
+- 🚀 نصب خودکار با یک دستور (One-Line Install)
+- 🐳 مبتنی بر Docker و Docker Compose
+- 🔐 دریافت خودکار SSL (Let's Encrypt)
+- 🎓 مدیریت دوره‌ها و دسته‌بندی‌ها
+- 📹 آپلود ویدیو (فایل یا لینک)
+- 💳 فروش دوره با پرداخت کارت‌به‌کارت
+- 🎟 کد تخفیف درصدی و مبلغی
+- 🎁 تخفیف خرید اول
+- 👤 ثبت‌نام و ورود کاربران
+- 🧑‍💼 پنل ادمین با سطح دسترسی
+- 🔁 امکان تغییر مسیر پنل ادمین
+- 🧾 مدیریت سفارش‌ها و تایید دستی پرداخت
+- 🎫 سیستم تیکتینگ با پیوست فایل
+- 🌗 تم روشن / تیره / سیستم
+- 🖌 ویرایش متن‌ها، فوتر و لینک‌ها از پنل
+- 💾 بکاپ و ریستور دیتابیس با فایل `.sql`
+- 🇮🇷 کاملاً فارسی و راست‌چین (RTL)
+- 📦 مناسب محیط Production (Nginx + Gunicorn)
 
 ---
 
-## 🚀 Installation (One-Line)
+## 🧱 تکنولوژی‌های استفاده‌شده
 
-You can install **EduCMS** using a single Bash command.
+| لایه | تکنولوژی |
+|-----|---------|
+| بک‌اند | Django 5 |
+| دیتابیس | MySQL 8 |
+| وب‌سرور | Nginx |
+| اپلیکیشن سرور | Gunicorn |
+| کانتینر | Docker |
+| SSL | Let's Encrypt |
 
-Just copy & paste this into your server terminal:
+---
+
+## 🚀 نصب با یک دستور (One-Line Install)
+
+برای نصب EduCMS فقط **دستور زیر** را در ترمینال سرور اجرا کنید:
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/admin6501/EduCMS/refs/heads/main/install.sh)
 
-💡 This command will:
+این دستور چه کاری انجام می‌دهد؟
 
-Download the installer securely
+اسکریپت نصب را دانلود می‌کند
 
-Open the interactive EduCMS menu
+منوی تعاملی EduCMS را اجرا می‌کند
 
-Guide you through full installation
+Docker، SSL و همه پیش‌نیازها را خودکار نصب می‌کند
 
-Install Docker, Docker Compose, SSL, and all dependencies automatically
+شما را قدم‌به‌قدم راهنمایی می‌کند
 
 
 
 ---
 
-🧭 Installer Menu
+🧭 منوی اسکریپت نصب
 
-After running the command, you will see:
+پس از اجرا، منوی زیر نمایش داده می‌شود:
 
 1) Install (نصب کامل)
 2) Stop (توقف)
@@ -80,202 +78,170 @@ After running the command, you will see:
 
 ---
 
-⚙️ Requirements
+⚙️ پیش‌نیازها
 
 Ubuntu 20.04 / 22.04 / 24.04
 
-Root access (sudo)
+دسترسی روت (sudo)
 
-A domain pointing to your server IP
+دامنه متصل به IP سرور
 
-Open ports: 80 and 443
-
-
-> Docker and all required packages are installed automatically.
+پورت‌های 80 و 443 باز
 
 
+> تمام وابستگی‌ها به‌صورت خودکار نصب می‌شوند.
 
-
----
-
-🔐 SSL & Security
-
-SSL certificates are issued automatically using Let's Encrypt
-
-Certificates are handled on the host, not inside Docker
-
-Auto-renew is enabled via Certbot
-
-Secure environment variables (.env)
-
-Admin URL can be changed for extra security
 
 
 
 ---
 
-💾 Database Backup
+🔐 SSL و امنیت
 
-EduCMS includes a built-in database backup system.
+دریافت خودکار SSL با Let's Encrypt
 
-Create Backup
+مدیریت SSL روی خود سرور (نه داخل Docker)
 
-1. Run the installer:
+تمدید خودکار گواهی
+
+استفاده از متغیرهای محیطی امن
+
+امکان تغییر مسیر پنل ادمین برای امنیت بیشتر
+
+
+
+---
+
+💾 بکاپ دیتابیس
+
+EduCMS دارای سیستم بکاپ داخلی است.
+
+گرفتن بکاپ
+
+1. اجرای اسکریپت:
 
 
 
 bash <(curl -sSL https://raw.githubusercontent.com/admin6501/EduCMS/refs/heads/main/install.sh)
 
-2. Select:
+2. انتخاب گزینه:
 
 
 
 5) Backup DB (.sql)
 
-📁 Backup files are stored in:
+📁 فایل‌های بکاپ در مسیر زیر ذخیره می‌شوند:
 
 /opt/educms/backups/
-
-Each backup is a standard MySQL .sql file.
 
 
 ---
 
-♻️ Database Restore
+♻️ ریستور دیتابیس
 
-To restore a database backup:
+برای بازگردانی بکاپ:
 
-1. Run the installer:
+1. اجرای اسکریپت:
 
 
 
 bash <(curl -sSL https://raw.githubusercontent.com/admin6501/EduCMS/refs/heads/main/install.sh)
 
-2. Select:
+2. انتخاب گزینه:
 
 
 
 6) Restore DB (.sql)
 
-3. Enter the full path to the backup file:
+3. وارد کردن مسیر کامل فایل بکاپ:
 
 
 
 /opt/educms/backups/educms-YYYYMMDD-HHMMSS.sql
 
-⚠️ Warning:
-This will completely replace the current database.
+⚠️ توجه:
+ریستور باعث حذف کامل دیتابیس فعلی می‌شود.
 
 
 ---
 
-👤 Admin Panel
+👤 پنل ادمین
 
-Default admin panel path:
+مسیر پیش‌فرض:
 
 
 /admin/
 
-You can change the admin URL from inside the panel
+قابل تغییر از داخل پنل
 
-Admins can:
-
-Manage courses & categories
-
-Upload videos
-
-Verify payments
-
-Manage tickets
-
-Add other admins with permissions
-
-Edit site texts, footer, links, branding
-
-Change their username & password
+پشتیبانی از چند ادمین با سطح دسترسی مختلف
 
 
+امکانات پنل:
 
+مدیریت دوره‌ها و دسته‌بندی‌ها
 
----
+تایید پرداخت‌ها
 
-🎫 Ticketing System
+مدیریت تیکت‌ها
 
-Users can create tickets
+مدیریت کاربران
 
-Attach files
+تغییر نام کاربری و رمز عبور ادمین
 
-View ticket history
-
-Admins can reply directly from the admin panel
+ویرایش متن‌ها، فوتر و لینک‌ها
 
 
 
 ---
 
-🧑‍🎓 User Features
+🎫 سیستم تیکتینگ
 
-Register & login
+ثبت تیکت توسط کاربران
 
-View purchased courses
+امکان ارسال پیوست
 
-Upload payment receipts
+مشاهده تاریخچه تیکت‌ها
 
-Use discount codes
-
-Access free or granted courses
-
-Submit and track tickets
+پاسخ‌دهی از پنل ادمین
 
 
 
 ---
 
-📂 Project Structure
+📂 ساختار پروژه
 
 EduCMS/
-├── app/                # Django project
-├── nginx/              # Nginx configs
-├── certbot/            # SSL webroot
-├── backups/            # Database backups
+├── app/            # پروژه Django
+├── nginx/          # تنظیمات Nginx
+├── certbot/        # فایل‌های SSL
+├── backups/        # بکاپ دیتابیس
 ├── docker-compose.yml
-└── install.sh          # Auto installer
+└── install.sh      # اسکریپت نصب خودکار
 
 
 ---
 
-🧪 Tested On
+📄 لایسنس
 
-Ubuntu 20.04 LTS
-
-Ubuntu 22.04 LTS
-
-Ubuntu 24.04 LTS
-
+این پروژه تحت لایسنس MIT منتشر شده است.
+استفاده، ویرایش و انتشار آزاد است.
 
 
 ---
 
-📄 License
+⭐ حمایت از پروژه
 
-This project is released under the MIT License.
-You are free to use, modify, and distribute it.
+اگر EduCMS برای شما مفید بود:
 
+⭐ به پروژه Star بدهید
 
----
+🐞 باگ‌ها را گزارش کنید
 
-⭐ Support the Project
-
-If you find EduCMS useful:
-
-⭐ Star the repository
-
-🐛 Report issues
-
-🤝 Contribute improvements
+🤝 در توسعه مشارکت کنید
 
 
 
 ---
 
-Built with ❤️ for the Persian developer community
+ساخته‌شده با ❤️ برای جامعه توسعه‌دهندگان فارسی‌زبان
