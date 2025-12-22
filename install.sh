@@ -1390,152 +1390,110 @@ PY
 <!doctype html>
 <html lang="fa" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
-<!-- Theme logic (safe, no 500) -->
+  <script>
+    tailwind = window.tailwind || {};
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <title>{% block title %}{{ site_settings.brand_name|default:"EduCMS" }}{% endblock %}</title>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
 <script>
 (function(){
   const root = document.documentElement;
 
   function apply(mode){
-    root.classList.remove("dark");
-
-    if (mode === "dark") {
-      root.classList.add("dark");
-      return;
-    }
-
-    if (mode === "system") {
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        root.classList.add("dark");
-      }
+    root.classList.remove('dark');
+    if (mode === 'dark') root.classList.add('dark');
+    if (mode === 'system') {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) root.classList.add('dark');
     }
   }
 
-  const serverDefault = "{% if site_settings and site_settings.default_theme %}{{ site_settings.default_theme }}{% else %}system{% endif %}";
-  const stored = localStorage.getItem("theme_mode");
-  const initial = (stored === "light" || stored === "dark" || stored === "system")
-    ? stored
-    : serverDefault;
-
+  const initial = localStorage.getItem('theme_mode') || '{{ site_settings.default_theme|default:"system" }}';
   apply(initial);
 
   window.__setTheme = function(m){
-    if (m !== "light" && m !== "dark" && m !== "system") return;
-    localStorage.setItem("theme_mode", m);
+    localStorage.setItem('theme_mode', m);
     apply(m);
   };
 })();
 </script>
 
-<!-- Tailwind Play CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-
-<style type="text/tailwindcss">
-  @custom-variant dark (&:where(.dark, .dark *));
-</style>
-
-<title>
-{% block title %}
-{% if site_settings and site_settings.brand_name %}
-  {{ site_settings.brand_name }}
-{% else %}
-  EduCMS
-{% endif %}
-{% endblock %}
-</title>
-</head>
-
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-  <div class="min-h-screen">
-
-    <header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/80 backdrop-blur dark:border-slate-800/60 dark:bg-slate-950/70">
-      <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
-
-        <a href="/" class="flex items-center gap-3">
-          {% if site_settings and site_settings.logo %}
-            <img src="{{ site_settings.logo.url }}" class="h-9 w-auto"
-                 alt="{% if site_settings.brand_name %}{{ site_settings.brand_name }}{% else %}EduCMS{% endif %}">
-          {% else %}
-            <div class="h-9 w-9 rounded-xl bg-slate-900 dark:bg-slate-100"></div>
-          {% endif %}
-
-          <div class="leading-tight">
-            <div class="font-bold">
-              {% if site_settings and site_settings.brand_name %}
-                {{ site_settings.brand_name }}
-              {% else %}
-                EduCMS
-              {% endif %}
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">
-              {% if site_settings and site_settings.tagline %}
-                {{ site_settings.tagline }}
-              {% else %}
-                سامانه آموزش
-              {% endif %}
-            </div>
-          </div>
-        </a>
-
-        <nav class="hidden md:flex items-center gap-4 text-sm">
-          {% if header_links %}
-            {% for l in header_links %}
-              <a class="hover:underline" href="{{ l.url }}">{{ l.title }}</a>
-            {% endfor %}
-          {% endif %}
-        </nav>
-
-        <div class="flex items-center gap-2">
-          <div class="hidden sm:flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-1 text-sm dark:border-slate-800 dark:bg-slate-950">
-            <button type="button" onclick="__setTheme('light')">روشن</button>
-            <button type="button" onclick="__setTheme('dark')">تیره</button>
-            <button type="button" onclick="__setTheme('system')">سیستم</button>
-          </div>
-
-          <a href="/{% if site_settings and site_settings.admin_path %}{{ site_settings.admin_path }}{% else %}admin{% endif %}/"
-             class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white">
-            پنل ادمین
-          </a>
-
-          {% if user.is_authenticated %}
-            <form method="post" action="/accounts/logout/" class="inline">
-              {% csrf_token %}
-              <button type="submit">خروج</button>
-            </form>
-          {% else %}
-            <a href="/accounts/login/">ورود</a>
-            <a href="/accounts/register/">ثبت‌نام</a>
-          {% endif %}
-        </div>
-
-      </div>
-    </header>
-
-    <main class="mx-auto max-w-6xl px-4 py-8">
-      {% if messages %}
-        {% for message in messages %}
-          <div>{{ message }}</div>
-        {% endfor %}
+<header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b dark:bg-slate-900/90 dark:border-slate-800">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <a href="/" class="flex items-center gap-3">
+      {% if site_settings.logo %}
+        <img src="{{ site_settings.logo.url }}" class="h-9 w-auto" alt="{{ site_settings.brand_name }}">
       {% endif %}
+      <span class="font-extrabold text-xl tracking-tight">{{ site_settings.brand_name|default:"EduCMS" }}</span>
+    </a>
 
-      {% block content %}{% endblock %}
-    </main>
+    <nav class="hidden md:flex items-center gap-4 text-sm">
+      {% for l in header_links %}
+        <a class="hover:underline" href="{{ l.url }}">{{ l.title }}</a>
+      {% endfor %}
+    </nav>
 
-    <footer class="border-t py-6 text-center text-xs">
-      {% if site_settings and site_settings.footer_text %}
-        {{ site_settings.footer_text }}
+    <div class="flex items-center gap-2 text-sm">
+      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('light')">لایت</button>
+      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('dark')">دارک</button>
+      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('system')">سیستم</button>
+
+      {% if user.is_authenticated %}
+        <a class="px-3 py-1 rounded-xl hover:underline" href="/orders/my/">سفارش‌های من</a>
+        <a class="px-3 py-1 rounded-xl hover:underline" href="/tickets/">تیکت‌ها</a>
+
+        <form method="post" action="/accounts/logout/" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="px-3 py-1 rounded-xl border dark:border-slate-700">خروج</button>
+        </form>
+
+        {% if user.is_staff %}
+          <a class="px-3 py-1 rounded-xl border dark:border-slate-700" href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
+        {% endif %}
       {% else %}
-        © تمامی حقوق محفوظ است.
+        <a class="px-3 py-1 rounded-xl border dark:border-slate-700" href="/accounts/login/">ورود</a>
+        <a class="px-3 py-1 rounded-xl border dark:border-slate-700" href="/accounts/register/">ثبت‌نام</a>
       {% endif %}
-    </footer>
-
+    </div>
   </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-8">
+  {% if messages %}
+    <div class="mb-5 space-y-2">
+      {% for m in messages %}
+        <div class="p-3 rounded-xl border bg-white dark:bg-slate-900 dark:border-slate-800">{{ m }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="border-t bg-white dark:bg-slate-900 dark:border-slate-800">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="text-sm text-slate-500 dark:text-slate-300 mb-4">
+      {{ site_settings.footer_text|default:"© تمامی حقوق محفوظ است." }}
+    </div>
+    {% if footer_links %}
+      <div class="flex flex-wrap gap-3 text-sm">
+        {% for l in footer_links %}
+          <a class="px-3 py-1 rounded-xl border dark:border-slate-700 hover:underline" href="{{ l.url }}">{{ l.title }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</footer>
 </body>
 </html>
-HTML
+
 
 
   # (بقیه قالب‌ها همان نسخه کامل قبلی هستند و حذف نشده‌اند)
