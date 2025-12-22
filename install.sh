@@ -1394,35 +1394,74 @@ PY
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
 
   <script>
-    tailwind = window.tailwind || {};
-    tailwind.config = { darkMode: 'class' };
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: 'class' };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
 
   <title>{% block title %}{{ site_settings.brand_name|default:"EduCMS" }}{% endblock %}</title>
+  {% block extra_head %}{% endblock %}
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
 <script>
-(function(){
+(function () {
   const root = document.documentElement;
+  const STORAGE_KEY = "theme_mode";
+  const media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
-  function apply(mode){
-    root.classList.remove('dark');
-    if (mode === 'dark') root.classList.add('dark');
-    if (mode === 'system') {
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) root.classList.add('dark');
-    }
+  function systemPrefersDark() {
+    return media ? media.matches : false;
   }
 
-  const initial = localStorage.getItem('theme_mode') || '{{ site_settings.default_theme|default:"system" }}';
+  function apply(mode) {
+    root.classList.remove("dark");
+    if (mode === "dark") root.classList.add("dark");
+    if (mode === "system" && systemPrefersDark()) root.classList.add("dark");
+  }
+
+  function getMode() {
+    return localStorage.getItem(STORAGE_KEY) || "{{ site_settings.default_theme|default:'system' }}";
+  }
+
+  function setMode(mode) {
+    localStorage.setItem(STORAGE_KEY, mode);
+    apply(mode);
+    updateButtons(mode);
+  }
+
+  function updateButtons(mode) {
+    const btns = document.querySelectorAll("[data-theme-btn]");
+    btns.forEach((b) => {
+      const m = b.getAttribute("data-theme-btn");
+      const active = (m === mode);
+      b.classList.toggle("bg-slate-900", active);
+      b.classList.toggle("text-white", active);
+      b.classList.toggle("dark:bg-white", active);
+      b.classList.toggle("dark:text-slate-900", active);
+    });
+  }
+
+  window.__setTheme = setMode;
+
+  const initial = getMode();
   apply(initial);
 
-  window.__setTheme = function(m){
-    localStorage.setItem('theme_mode', m);
-    apply(m);
-  };
+  document.addEventListener("DOMContentLoaded", function () {
+    updateButtons(getMode());
+  });
+
+  if (media && media.addEventListener) {
+    media.addEventListener("change", function () {
+      const mode = getMode();
+      if (mode === "system") apply(mode);
+    });
+  } else if (media && media.addListener) {
+    media.addListener(function () {
+      const mode = getMode();
+      if (mode === "system") apply(mode);
+    });
+  }
 })();
 </script>
 
@@ -1442,9 +1481,22 @@ PY
     </nav>
 
     <div class="flex items-center gap-2 text-sm">
-      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('light')">لایت</button>
-      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('dark')">دارک</button>
-      <button type="button" class="px-3 py-1 rounded-xl border dark:border-slate-700" onclick="__setTheme('system')">سیستم</button>
+      <button type="button"
+              class="px-3 py-1 rounded-xl border dark:border-slate-700"
+              data-theme-btn="light"
+              onclick="__setTheme('light')">لایت</button>
+
+      <button type="button"
+              class="px-3 py-1 rounded-xl border dark:border-slate-700"
+              data-theme-btn="dark"
+              onclick="__setTheme('dark')">دارک</button>
+
+      <button type="button"
+              class="px-3 py-1 rounded-xl border dark:border-slate-700"
+              data-theme-btn="system"
+              onclick="__setTheme('system')">سیستم</button>
+
+      <span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
 
       {% if user.is_authenticated %}
         <a class="px-3 py-1 rounded-xl hover:underline" href="/orders/my/">سفارش‌های من</a>
@@ -1474,6 +1526,7 @@ PY
       {% endfor %}
     </div>
   {% endif %}
+
   {% block content %}{% endblock %}
 </main>
 
@@ -1482,6 +1535,7 @@ PY
     <div class="text-sm text-slate-500 dark:text-slate-300 mb-4">
       {{ site_settings.footer_text|default:"© تمامی حقوق محفوظ است." }}
     </div>
+
     {% if footer_links %}
       <div class="flex flex-wrap gap-3 text-sm">
         {% for l in footer_links %}
@@ -1491,39 +1545,11 @@ PY
     {% endif %}
   </div>
 </footer>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>
 
-
-
-  # (بقیه قالب‌ها همان نسخه کامل قبلی هستند و حذف نشده‌اند)
-  # برای کوتاه نشدن و حذف نشدن صفحات، همه قالب‌ها را می‌نویسم:
-
-  cat > app/templates/courses/course_list.html <<'HTML'
-{% extends "base.html" %}
-{% block title %}دوره‌ها - {{ site_settings.brand_name|default:"EduCMS" }}{% endblock %}
-{% block content %}
-  <div class="flex items-end justify-between mb-6">
-    <h1 class="text-2xl font-extrabold">{{ tpl.home_title|default:"دوره‌های آموزشی" }}</h1>
-    <div class="text-sm text-slate-500 dark:text-slate-300">{{ tpl.home_subtitle|default:"جدیدترین دوره‌ها" }}</div>
-  </div>
-
-  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% for c in object_list %}
-      <a href="{% url 'course_detail' c.slug %}" class="bg-white dark:bg-slate-900 rounded-2xl border dark:border-slate-800 hover:shadow-md transition p-4">
-        <div class="font-bold text-lg mb-2">{{ c.title }}</div>
-        <div class="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ c.summary|default:"—" }}</div>
-        <div class="mt-4 text-xs text-slate-500 dark:text-slate-300 flex justify-between">
-          <span>{{ c.category.title|default:"بدون دسته" }}</span>
-          <span>{% if c.is_free_for_all %}رایگان{% elif c.price_toman %}{{ c.price_toman }} تومان{% else %}رایگان{% endif %}</span>
-        </div>
-      </a>
-    {% empty %}
-      <div class="text-slate-600 dark:text-slate-300">{{ tpl.home_empty|default:"هنوز دوره‌ای منتشر نشده است." }}</div>
-    {% endfor %}
-  </div>
-{% endblock %}
-HTML
 
   cat > app/templates/courses/course_detail.html <<'HTML'
 {% extends "base.html" %}
