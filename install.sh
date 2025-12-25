@@ -452,6 +452,7 @@ class UserProfile(models.Model):
   q2 = models.ForeignKey(SecurityQuestion, on_delete=models.SET_NULL, null=True, blank=True, related_name="p_q2", verbose_name=_("سوال ۲"))
   a1_hash = models.CharField(max_length=200, blank=True, verbose_name=_("هش پاسخ ۱"))
   a2_hash = models.CharField(max_length=200, blank=True, verbose_name=_("هش پاسخ ۲"))
+  extra_data = models.JSONField(default=dict, blank=True, verbose_name=_("داده‌های اضافی"))
   updated_at = models.DateTimeField(auto_now=True)
 
   class Meta:
@@ -503,9 +504,23 @@ class SecurityQuestionAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user","phone","q1","q2","updated_at")
+    list_display = ("user","phone","q1","q2","has_extra_data","updated_at")
     list_select_related = ("user","q1","q2")
     search_fields = ("user__email","user__username","phone")
+    readonly_fields = ("extra_data_display",)
+
+    def has_extra_data(self, obj):
+        return bool(obj.extra_data)
+    has_extra_data.boolean = True
+    has_extra_data.short_description = "داده اضافی"
+
+    def extra_data_display(self, obj):
+        if not obj.extra_data:
+            return "-"
+        from django.utils.html import format_html
+        lines = [f"<b>{k}:</b> {v}" for k, v in obj.extra_data.items()]
+        return format_html("<br>".join(lines))
+    extra_data_display.short_description = "داده‌های اضافی"
 
 PY
   cat > app/accounts/forms.py <<'PY'
@@ -520,6 +535,47 @@ from .models import UserProfile, SecurityQuestion
 User = get_user_model()
 
 _INPUT = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700"
+
+def get_registration_fields():
+    """Get active registration fields from database"""
+    from settingsapp.models import RegistrationField
+    return RegistrationField.objects.filter(is_active=True).order_by("order", "id")
+
+def build_form_field(reg_field):
+    """Build a Django form field from a RegistrationField model instance"""
+    attrs = {"class": _INPUT}
+    if reg_field.placeholder:
+        attrs["placeholder"] = reg_field.placeholder
+    if reg_field.field_type in ("email", "phone", "password", "text"):
+        attrs["dir"] = "ltr"
+
+    field_kwargs = {
+        "label": reg_field.label,
+        "required": reg_field.is_required,
+        "help_text": reg_field.help_text or "",
+    }
+
+    if reg_field.field_type == "text":
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "email":
+        attrs["autocomplete"] = "email"
+        return forms.EmailField(widget=forms.EmailInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "phone":
+        attrs["autocomplete"] = "tel"
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "textarea":
+        attrs["rows"] = 3
+        return forms.CharField(widget=forms.Textarea(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "select":
+        choices = [("", _("انتخاب کنید"))] + [(c, c) for c in reg_field.get_choices_list()]
+        return forms.ChoiceField(choices=choices, widget=forms.Select(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "checkbox":
+        return forms.BooleanField(widget=forms.CheckboxInput(attrs={"class": "rounded"}), **field_kwargs)
+    elif reg_field.field_type == "password":
+        attrs["autocomplete"] = "new-password"
+        return forms.CharField(widget=forms.PasswordInput(attrs=attrs), **field_kwargs)
+    else:
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
 
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
@@ -565,8 +621,24 @@ class RegisterForm(UserCreationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._dynamic_fields = []
 
+        # Add dynamic fields from RegistrationField model
+        try:
+            for reg_field in get_registration_fields():
+                # Skip system fields that are already defined
+                if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
+                    continue
+                field = build_form_field(reg_field)
+                self.fields[f"custom_{reg_field.field_key}"] = field
+                self._dynamic_fields.append(reg_field.field_key)
+        except Exception:
+            pass  # Database might not be ready during migrations
+
+        # Reorder fields
         ordered = ["email", "security_question", "security_answer", "password1", "password2"]
+        for key in self._dynamic_fields:
+            ordered.append(f"custom_{key}")
         self.order_fields(ordered)
 
     def clean_email(self):
@@ -583,6 +655,15 @@ class RegisterForm(UserCreationForm):
             raise forms.ValidationError(_("پاسخ کوتاه است."))
         return a
 
+    def get_custom_field_data(self):
+        """Return a dict of custom field values"""
+        data = {}
+        for key in self._dynamic_fields:
+            field_name = f"custom_{key}"
+            if field_name in self.cleaned_data:
+                data[key] = self.cleaned_data[field_name]
+        return data
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = (self.cleaned_data.get("email") or "").strip().lower()
@@ -592,6 +673,11 @@ class RegisterForm(UserCreationForm):
             prof.q1 = self.cleaned_data.get("security_question")
             ans = (self.cleaned_data.get("security_answer") or "").strip().lower()
             prof.a1_hash = make_password(ans)
+
+            # Save custom fields to profile extra_data
+            custom_data = self.get_custom_field_data()
+            if custom_data:
+                prof.extra_data = custom_data
             prof.save()
         return user
 
@@ -604,6 +690,39 @@ class ProfileForm(forms.ModelForm):
             "last_name": forms.TextInput(attrs={"class": _INPUT}),
             "email": forms.EmailInput(attrs={"class": _INPUT, "dir": "ltr"}),
         }
+
+    def __init__(self, *args, profile=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile = profile
+        self._dynamic_fields = []
+
+        # Add dynamic fields that should show in profile
+        try:
+            for reg_field in get_registration_fields():
+                if not reg_field.show_in_profile:
+                    continue
+                if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
+                    continue
+                field = build_form_field(reg_field)
+                field_name = f"custom_{reg_field.field_key}"
+                self.fields[field_name] = field
+                self._dynamic_fields.append(reg_field.field_key)
+
+                # Set initial value from profile extra_data
+                if profile and profile.extra_data:
+                    if reg_field.field_key in profile.extra_data:
+                        self.initial[field_name] = profile.extra_data[reg_field.field_key]
+        except Exception:
+            pass
+
+    def get_custom_field_data(self):
+        """Return a dict of custom field values"""
+        data = {}
+        for key in self._dynamic_fields:
+            field_name = f"custom_{key}"
+            if field_name in self.cleaned_data:
+                data[key] = self.cleaned_data[field_name]
+        return data
 
 class SecurityQuestionsForm(forms.Form):
     q1 = forms.ModelChoiceField(
@@ -725,16 +844,34 @@ class RegisterView(CreateView):
 
 @login_required
 def profile_edit(request):
-  profile,_ = UserProfile.objects.get_or_create(user=request.user)
-  form = ProfileForm(request.POST or None, instance=request.user)
-  if request.method=="POST" and form.is_valid():
+  from settingsapp.models import SiteSetting
+  site_setting = SiteSetting.objects.first()
+  allow_edit = site_setting.allow_profile_edit if site_setting else True
+
+  if not allow_edit:
+    messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
+    return render(request, "accounts/profile.html", {"form": None, "profile": None, "allow_edit": False})
+
+  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
+
+  if request.method == "POST" and form.is_valid():
     form.save()
-    profile.phone=(request.POST.get("phone") or "").strip()
-    profile.bio=(request.POST.get("bio") or "").strip()
-    profile.save(update_fields=["phone","bio"])
-    messages.success(request,"پروفایل بروزرسانی شد.")
+    profile.phone = (request.POST.get("phone") or "").strip()
+    profile.bio = (request.POST.get("bio") or "").strip()
+
+    # Save custom field data
+    custom_data = form.get_custom_field_data()
+    if custom_data:
+      if not profile.extra_data:
+        profile.extra_data = {}
+      profile.extra_data.update(custom_data)
+
+    profile.save(update_fields=["phone", "bio", "extra_data", "updated_at"])
+    messages.success(request, "پروفایل بروزرسانی شد.")
     return redirect("profile_edit")
-  return render(request,"accounts/profile.html",{"form":form,"profile":profile})
+
+  return render(request, "accounts/profile.html", {"form": form, "profile": profile, "allow_edit": True})
 
 @login_required
 def security_questions(request):
@@ -821,10 +958,53 @@ class SiteSetting(models.Model):
   default_theme = models.CharField(max_length=10, choices=THEME_MODE, default="system", verbose_name=_("تم پیش‌فرض"))
   footer_text = models.TextField(blank=True, verbose_name=_("متن فوتر"))
   admin_path = models.SlugField(max_length=50, default="admin", verbose_name=_("مسیر ادمین"))
+  allow_profile_edit = models.BooleanField(default=True, verbose_name=_("اجازه ویرایش پروفایل توسط کاربران"))
   updated_at = models.DateTimeField(auto_now=True)
   class Meta:
     verbose_name=_("تنظیمات سایت"); verbose_name_plural=_("تنظیمات سایت")
   def __str__(self): return "Site Settings"
+
+class RegistrationFieldType(models.TextChoices):
+  TEXT = "text", _("متن کوتاه")
+  EMAIL = "email", _("ایمیل")
+  PHONE = "phone", _("شماره تلفن")
+  TEXTAREA = "textarea", _("متن بلند")
+  SELECT = "select", _("انتخابی")
+  CHECKBOX = "checkbox", _("چک‌باکس")
+  PASSWORD = "password", _("رمز عبور")
+
+class RegistrationField(models.Model):
+  field_key = models.SlugField(max_length=50, unique=True, verbose_name=_("کلید فیلد"))
+  label = models.CharField(max_length=150, verbose_name=_("برچسب"))
+  field_type = models.CharField(max_length=20, choices=RegistrationFieldType.choices, default=RegistrationFieldType.TEXT, verbose_name=_("نوع فیلد"))
+  placeholder = models.CharField(max_length=200, blank=True, verbose_name=_("متن راهنما"))
+  help_text = models.CharField(max_length=300, blank=True, verbose_name=_("متن کمکی"))
+  choices = models.TextField(blank=True, verbose_name=_("گزینه‌ها"), help_text=_("هر گزینه در یک خط (فقط برای فیلد انتخابی)"))
+  is_required = models.BooleanField(default=False, verbose_name=_("اجباری"))
+  is_active = models.BooleanField(default=True, verbose_name=_("فعال"))
+  is_system = models.BooleanField(default=False, verbose_name=_("فیلد سیستمی"), help_text=_("فیلدهای سیستمی قابل حذف یا غیرفعال‌سازی نیستند"))
+  show_in_profile = models.BooleanField(default=True, verbose_name=_("نمایش در پروفایل"))
+  order = models.PositiveIntegerField(default=0, verbose_name=_("ترتیب"))
+  created_at = models.DateTimeField(auto_now_add=True)
+  updated_at = models.DateTimeField(auto_now=True)
+
+  class Meta:
+    ordering = ["order", "id"]
+    verbose_name = _("فیلد ثبت‌نام")
+    verbose_name_plural = _("فیلدهای ثبت‌نام")
+
+  def __str__(self):
+    return f"{self.label} ({self.field_key})"
+
+  def get_choices_list(self):
+    if not self.choices:
+      return []
+    return [c.strip() for c in self.choices.strip().split("\n") if c.strip()]
+
+  def save(self, *args, **kwargs):
+    if self.is_system:
+      self.is_active = True
+    super().save(*args, **kwargs)
 
 class TemplateText(models.Model):
   key=models.SlugField(max_length=150, unique=True)
@@ -848,11 +1028,58 @@ class NavLink(models.Model):
 PY
   cat > app/settingsapp/admin.py <<'PY'
 from django.contrib import admin
-from .models import SiteSetting, TemplateText, NavLink
+from django.contrib import messages
+from django.utils.translation import gettext_lazy as _
+from .models import SiteSetting, TemplateText, NavLink, RegistrationField
+
 admin.site.site_header="پنل مدیریت"
 admin.site.site_title="پنل مدیریت"
 admin.site.index_title="مدیریت سایت"
-admin.site.register(SiteSetting)
+
+@admin.register(SiteSetting)
+class SiteSettingAdmin(admin.ModelAdmin):
+    list_display = ("brand_name", "default_theme", "allow_profile_edit", "admin_path", "updated_at")
+    fieldsets = (
+        (_("برند"), {"fields": ("brand_name", "logo", "favicon")}),
+        (_("ظاهر"), {"fields": ("default_theme", "footer_text")}),
+        (_("تنظیمات کاربران"), {"fields": ("allow_profile_edit",)}),
+        (_("امنیت"), {"fields": ("admin_path",)}),
+    )
+
+@admin.register(RegistrationField)
+class RegistrationFieldAdmin(admin.ModelAdmin):
+    list_display = ("label", "field_key", "field_type", "is_required", "is_active", "is_system", "show_in_profile", "order")
+    list_filter = ("field_type", "is_required", "is_active", "is_system", "show_in_profile")
+    list_editable = ("order", "is_required", "is_active", "show_in_profile")
+    search_fields = ("field_key", "label")
+    ordering = ("order", "id")
+    fieldsets = (
+        (None, {"fields": ("field_key", "label", "field_type")}),
+        (_("تنظیمات فیلد"), {"fields": ("placeholder", "help_text", "choices")}),
+        (_("وضعیت"), {"fields": ("is_required", "is_active", "is_system", "show_in_profile", "order")}),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.is_system:
+            return ("field_key", "is_system", "is_active")
+        return ("is_system",)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_system:
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def save_model(self, request, obj, form, change):
+        if change and obj.is_system:
+            original = RegistrationField.objects.get(pk=obj.pk)
+            if not original.is_active and not obj.is_active:
+                pass
+            elif original.is_system:
+                obj.is_active = True
+        super().save_model(request, obj, form, change)
+        if obj.is_system and not obj.is_active:
+            messages.warning(request, _("فیلدهای سیستمی نمی‌توانند غیرفعال شوند."))
+
 admin.site.register(TemplateText)
 admin.site.register(NavLink)
 PY
@@ -1871,20 +2098,29 @@ HTML
 {% block title %}پروفایل{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">ویرایش پروفایل</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div><label class="text-sm font-medium">شماره تماس</label>
-        <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
-      </div>
-      <div><label class="text-sm font-medium">بیو</label>
-        <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
-      </div>
+  <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
+
+  {% if not allow_edit %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+      <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
+      <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
     </div>
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
-  </form>
+  {% else %}
+    <form method="post" class="space-y-4">{% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div><label class="text-sm font-medium">شماره تماس</label>
+          <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
+        </div>
+        <div><label class="text-sm font-medium">بیو</label>
+          <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
+        </div>
+      </div>
+      <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+    </form>
+  {% endif %}
+
   <div class="mt-4 text-sm"><a class="underline" href="/accounts/security/">مدیریت سوالات امنیتی</a></div>
 </div>
 {% endblock %}
@@ -2240,7 +2476,7 @@ python manage.py migrate --noinput
 python manage.py shell <<'PY'
 import os
 from django.contrib.auth import get_user_model
-from settingsapp.models import SiteSetting, TemplateText
+from settingsapp.models import SiteSetting, TemplateText, RegistrationField
 from payments.models import BankTransferSetting
 from accounts.models import SecurityQuestion, UserProfile
 
@@ -2259,7 +2495,18 @@ qs=[("نام اولین معلم شما چه بود؟",1),("نام شهر محل
 for t,o in qs:
   SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
 
-s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path})
+# Seed default registration fields (system fields that cannot be deleted)
+default_fields = [
+    {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
+    {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
+    {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
+    {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
+    {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
+]
+for f in default_fields:
+    RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
+
+s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path,"allow_profile_edit":True})
 if not s.admin_path:
   s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
 
