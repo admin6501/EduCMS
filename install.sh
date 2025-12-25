@@ -2311,15 +2311,15 @@ menu_header(){
 }
 
 menu_show(){
-  echo "1) Install"
-  echo "2) Start"
-  echo "3) Stop"
-  echo "4) Restart"
-  echo "5) Patch/Repair"
-  echo "6) Backup DB"
-  echo "7) Restore DB"
-  echo "8) Uninstall"
+  echo "1) Install (نصب کامل)"
+  echo "2) Start (استارت)"
+  echo "3) Stop (توقف)"
+  echo "4) Restart (ری‌استارت)"
+  echo "5) Backup DB (.sql)"
+  echo "6) Restore DB (.sql)"
+  echo "7) Uninstall (حذف کامل)"
   echo "0) Exit"
+  echo
 }
 
 main(){
@@ -2348,18 +2348,18 @@ main(){
     menu_show
     read -r -p "Select: " c </dev/tty || c=""
     case "${c:-}" in
-      2) do_start ;;
-      1) do_install ;;
-      3) do_stop ;;
-      4) do_restart ;;
-      5) do_uninstall ;;
-      6) backup_db ;;
-      7)
-        p="$(read_line "Path to .sql file (e.g. /opt/educms/backups/file.sql): ")"
-        restore_db "$p"
-        ;;
-      0) echo "Bye." ; exit 0 ;;
-      *) echo "Invalid option." ;;
+1) do_install ;;
+2) do_start ;;
+3) do_stop ;;
+4) do_restart ;;
+5) backup_db ;;
+6)
+  p="$(read_line "Path to .sql file (e.g. /opt/educms/backups/file.sql): ")"
+  restore_db "$p"
+  ;;
+7) do_uninstall ;;
+0) echo "Bye." ; exit 0 ;;
+*) echo "Invalid option." ;;
     esac
     read -r -p "Press Enter..." _ </dev/tty || true
   done
