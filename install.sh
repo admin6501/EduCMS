@@ -262,6 +262,18 @@ if __name__ == "__main__":
 PY
   cat > app/educms/__init__.py <<'PY'
 PY
+  cat > app/accounts/__init__.py <<'PY'
+PY
+  cat > app/courses/__init__.py <<'PY'
+PY
+  cat > app/settingsapp/__init__.py <<'PY'
+PY
+  cat > app/payments/__init__.py <<'PY'
+PY
+  cat > app/tickets/__init__.py <<'PY'
+PY
+  cat > app/dashboard/__init__.py <<'PY'
+PY
   cat > app/educms/wsgi.py <<'PY'
 import os
 from django.core.wsgi import get_wsgi_application
@@ -491,9 +503,9 @@ class SecurityQuestionAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user","phone_number","security_question_1","security_question_2","updated_at")
-    list_select_related = ("user","security_question_1","security_question_2")
-    search_fields = ("user__email","user__username","phone_number")
+    list_display = ("user","phone","q1","q2","updated_at")
+    list_select_related = ("user","q1","q2")
+    search_fields = ("user__email","user__username","phone")
 
 PY
   cat > app/accounts/forms.py <<'PY'
@@ -582,6 +594,84 @@ class RegisterForm(UserCreationForm):
             prof.a1_hash = make_password(ans)
             prof.save()
         return user
+
+class ProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "email")
+        widgets = {
+            "first_name": forms.TextInput(attrs={"class": _INPUT}),
+            "last_name": forms.TextInput(attrs={"class": _INPUT}),
+            "email": forms.EmailInput(attrs={"class": _INPUT, "dir": "ltr"}),
+        }
+
+class SecurityQuestionsForm(forms.Form):
+    q1 = forms.ModelChoiceField(
+        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        required=True,
+        label=_("سوال امنیتی ۱"),
+        widget=forms.Select(attrs={"class": _INPUT})
+    )
+    a1 = forms.CharField(
+        required=True,
+        label=_("پاسخ سوال ۱"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
+    )
+    q2 = forms.ModelChoiceField(
+        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        required=True,
+        label=_("سوال امنیتی ۲"),
+        widget=forms.Select(attrs={"class": _INPUT})
+    )
+    a2 = forms.CharField(
+        required=True,
+        label=_("پاسخ سوال ۲"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean(self):
+        c = super().clean()
+        q1 = c.get("q1")
+        q2 = c.get("q2")
+        if q1 and q2 and q1 == q2:
+            raise forms.ValidationError(_("سوالات امنیتی باید متفاوت باشند."))
+        return c
+
+class ResetStep1Form(forms.Form):
+    identifier = forms.CharField(
+        label=_("ایمیل یا نام کاربری"),
+        widget=forms.TextInput(attrs={"class": _INPUT, "dir": "ltr", "autocomplete": "username"})
+    )
+
+class ResetStep2Form(forms.Form):
+    a1 = forms.CharField(
+        label=_("پاسخ سوال ۱"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
+    )
+    a2 = forms.CharField(
+        label=_("پاسخ سوال ۲"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
+    )
+    new_password1 = forms.CharField(
+        label=_("رمز جدید"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "new-password", "dir": "ltr"})
+    )
+    new_password2 = forms.CharField(
+        label=_("تکرار رمز جدید"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "new-password", "dir": "ltr"})
+    )
+
+    def clean(self):
+        c = super().clean()
+        p1 = c.get("new_password1")
+        p2 = c.get("new_password2")
+        if p1 and p2 and p1 != p2:
+            raise forms.ValidationError(_("رمزها یکسان نیستند."))
+        return c
 PY
 
   cat > app/accounts/backends.py <<'PY'
@@ -2140,6 +2230,7 @@ HTML
 HTML
 
   cat > app/entrypoint.sh <<'SH'
+#!/bin/bash
 set -e
 sleep 2
 
@@ -2252,7 +2343,7 @@ do_patch(){
 }
 
 
-do_start(){ compose_cd_or_fail; docker compose up -d >/dev/null 2>&1 || docker compose up -d; ok "Started."; }
+do_start(){ cd "$APP_DIR" || die "Cannot cd to $APP_DIR"; docker compose up -d >/dev/null 2>&1 || docker compose up -d; echo "Started."; }
 
 do_stop(){ cd "$APP_DIR" && docker compose down --remove-orphans || true; }
 do_restart(){ cd "$APP_DIR" && docker compose up -d --build; }
@@ -2312,12 +2403,13 @@ menu_header(){
 
 menu_show(){
   echo "1) Install (نصب کامل)"
-  echo "2) Start (استارت)"
-  echo "3) Stop (توقف)"
-  echo "4) Restart (ری‌استارت)"
-  echo "5) Backup DB (.sql)"
-  echo "6) Restore DB (.sql)"
-  echo "7) Uninstall (حذف کامل)"
+  echo "2) Patch (بروزرسانی کد)"
+  echo "3) Start (استارت)"
+  echo "4) Stop (توقف)"
+  echo "5) Restart (ری‌استارت)"
+  echo "6) Backup DB (.sql)"
+  echo "7) Restore DB (.sql)"
+  echo "8) Uninstall (حذف کامل)"
   echo "0) Exit"
   echo
 }
@@ -2329,6 +2421,7 @@ main(){
     case "${1:-}" in
       start) do_start ;;
       install) do_install ;;
+      patch) do_patch ;;
       stop) do_stop ;;
       restart) do_restart ;;
       uninstall) do_uninstall ;;
@@ -2337,7 +2430,7 @@ main(){
         [[ -n "${2:-}" ]] || die "Usage: $0 restore /path/to/file.sql"
         restore_db "${2}"
         ;;
-      *) echo "Usage: $0 [install|stop|restart|uninstall|backup|restore /path/file.sql]" ; exit 1 ;;
+      *) echo "Usage: $0 [install|start|patch|stop|restart|uninstall|backup|restore /path/file.sql]" ; exit 1 ;;
     esac
     exit 0
   fi
@@ -2349,15 +2442,16 @@ main(){
     read -r -p "Select: " c </dev/tty || c=""
     case "${c:-}" in
 1) do_install ;;
-2) do_start ;;
-3) do_stop ;;
-4) do_restart ;;
-5) backup_db ;;
-6)
+2) do_patch ;;
+3) do_start ;;
+4) do_stop ;;
+5) do_restart ;;
+6) backup_db ;;
+7)
   p="$(read_line "Path to .sql file (e.g. /opt/educms/backups/file.sql): ")"
   restore_db "$p"
   ;;
-7) do_uninstall ;;
+8) do_uninstall ;;
 0) echo "Bye." ; exit 0 ;;
 *) echo "Invalid option." ;;
     esac
