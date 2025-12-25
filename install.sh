@@ -2187,14 +2187,97 @@ backup_db(){
   echo "Backup: $file"
 }
 
+restore_db(){
+  require_root; require_tty
+  [[ -f "$ENV_FILE" ]] || die ".env not found"
+  set -a; . "$ENV_FILE"; set +a
+  cd "$APP_DIR"
+  local sql_file="${1:-}"
+  [[ -n "$sql_file" && -f "$sql_file" ]] || die "Provide existing .sql path."
+
+  echo "WARNING: This will overwrite DB '${DB_NAME}' using: ${sql_file}"
+  read -r -p "Type YES to continue: " ans </dev/tty || true
+  [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
+
+  docker compose up -d db >/dev/null
+  docker compose exec -T db sh -lc "mysql -uroot -p\"${DB_PASS}\" -e 'DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
+  docker compose exec -T db sh -lc "mysql -uroot -p\"${DB_PASS}\" \"${DB_NAME}\"" < "${sql_file}"
+  docker compose up -d web nginx >/dev/null || true
+  echo "Restore completed."
+}
+
+do_uninstall(){
+  require_root; require_tty
+  echo "WARNING: This removes ${APP_DIR} and docker volumes."
+  read -r -p "Type YES to continue: " ans </dev/tty || true
+  [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
+  if [[ -d "${APP_DIR}" && -f "${APP_DIR}/docker-compose.yml" ]]; then
+    (cd "${APP_DIR}" && docker compose down --remove-orphans --volumes) || true
+  fi
+  rm -rf "${APP_DIR}" || true
+  echo "Uninstalled."
+}
+
+menu_header(){
+  clear || true
+  echo "============================================"
+  echo "            EduCMS Menu (Latest)            "
+  echo "============================================"
+  echo "Path: ${APP_DIR}"
+  echo
+}
+
+menu_show(){
+  echo "1) Install (نصب کامل)"
+  echo "2) Stop (توقف)"
+  echo "3) Restart (ری‌استارت)"
+  echo "4) Uninstall (حذف کامل)"
+  echo "5) Backup DB (.sql)"
+  echo "6) Restore DB (.sql)"
+  echo "0) Exit"
+  echo
+}
+
 main(){
   require_root
-  case "${1:-}" in
-    install|"") do_install ;;
-    stop) do_stop ;;
-    restart) do_restart ;;
-    backup) backup_db ;;
-    *) echo "Usage: $0 [install|stop|restart|backup]" ; exit 1 ;;
-  esac
+
+  # If called with CLI args, do quick actions.
+  if [[ ${#} -gt 0 ]]; then
+    case "${1:-}" in
+      install) do_install ;;
+      stop) do_stop ;;
+      restart) do_restart ;;
+      uninstall) do_uninstall ;;
+      backup) backup_db ;;
+      restore)
+        [[ -n "${2:-}" ]] || die "Usage: $0 restore /path/to/file.sql"
+        restore_db "${2}"
+        ;;
+      *) echo "Usage: $0 [install|stop|restart|uninstall|backup|restore /path/file.sql]" ; exit 1 ;;
+    esac
+    exit 0
+  fi
+
+  require_tty
+  while true; do
+    menu_header
+    menu_show
+    read -r -p "Select: " c </dev/tty || c=""
+    case "${c:-}" in
+      1) do_install ;;
+      2) do_stop ;;
+      3) do_restart ;;
+      4) do_uninstall ;;
+      5) backup_db ;;
+      6)
+        p="$(read_line "Path to .sql file (e.g. /opt/educms/backups/file.sql): ")"
+        restore_db "$p"
+        ;;
+      0) echo "Bye." ; exit 0 ;;
+      *) echo "Invalid option." ;;
+    esac
+    read -r -p "Press Enter..." _ </dev/tty || true
+  done
 }
+
 main "$@"
