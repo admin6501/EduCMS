@@ -128,17 +128,22 @@ bash <(curl -sSL https://raw.githubusercontent.com/admin6501/EduCMS/refs/heads/m
 پس از اجرای اسکریپت، منوی زیر نمایش داده می‌شود:
 
 ```
-╔════════════════════════════════════╗
-║         EduCMS Management          ║
-╠════════════════════════════════════╣
-║  1) Install      - نصب کامل        ║
-║  2) Stop         - توقف سرویس‌ها    ║
-║  3) Restart      - ری‌استارت        ║
-║  4) Uninstall    - حذف کامل        ║
-║  5) Backup DB    - پشتیبان‌گیری     ║
-║  6) Restore DB   - بازگردانی       ║
-║  0) Exit         - خروج            ║
-╚════════════════════════════════════╝
+============================================
+            EduCMS Menu (Latest)            
+============================================
+Path: /opt/educms
+
+1) Install        (نصب کامل)
+2) Patch          (بروزرسانی کد)
+3) Start          (استارت)
+4) Stop           (توقف)
+5) Restart        (ری‌استارت)
+6) Backup DB      (.sql)
+7) Restore DB     (.sql)
+8) Uninstall      (حذف کامل)
+0) Exit
+
+Select: 
 ```
 
 ---
