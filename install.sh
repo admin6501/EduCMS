@@ -904,6 +904,20 @@ def profile_edit(request):
 
 @login_required
 def security_questions(request):
+  # Check if security questions editing is allowed
+  allow_edit = True
+  try:
+    from settingsapp.models import SiteSetting
+    site_setting = SiteSetting.objects.first()
+    if site_setting:
+      allow_edit = getattr(site_setting, 'allow_security_edit', True)
+  except Exception:
+    pass
+
+  if not allow_edit:
+    messages.error(request, "تغییر سوالات امنیتی توسط مدیر غیرفعال شده است.")
+    return render(request, "accounts/security_questions.html", {"form": None, "allow_edit": False})
+
   profile,_ = UserProfile.objects.get_or_create(user=request.user)
   init={}
   if profile.q1: init["q1"]=profile.q1
@@ -915,7 +929,7 @@ def security_questions(request):
     profile.save(update_fields=["q1","q2","a1_hash","a2_hash"])
     messages.success(request,"سوالات امنیتی بروزرسانی شد.")
     return redirect("security_questions")
-  return render(request,"accounts/security_questions.html",{"form":form})
+  return render(request,"accounts/security_questions.html",{"form":form, "allow_edit": True})
 
 def reset_step1(request):
   form=ResetStep1Form(request.POST or None)
@@ -988,6 +1002,7 @@ class SiteSetting(models.Model):
   footer_text = models.TextField(blank=True, verbose_name=_("متن فوتر"))
   admin_path = models.SlugField(max_length=50, default="admin", verbose_name=_("مسیر ادمین"))
   allow_profile_edit = models.BooleanField(default=True, verbose_name=_("اجازه ویرایش پروفایل توسط کاربران"))
+  allow_security_edit = models.BooleanField(default=True, verbose_name=_("اجازه تغییر سوالات امنیتی توسط کاربران"))
   updated_at = models.DateTimeField(auto_now=True)
   class Meta:
     verbose_name=_("تنظیمات سایت"); verbose_name_plural=_("تنظیمات سایت")
@@ -2163,11 +2178,19 @@ HTML
 {% block content %}
 <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
   <h1 class="text-xl font-extrabold mb-4">سوالات امنیتی</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
-  </form>
+
+  {% if not allow_edit %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+      <p class="font-semibold">تغییر سوالات امنیتی غیرفعال است</p>
+      <p class="text-sm mt-1">تغییر سوالات امنیتی توسط مدیر سایت غیرفعال شده است.</p>
+    </div>
+  {% else %}
+    <form method="post" class="space-y-4">{% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+      <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+    </form>
+  {% endif %}
 </div>
 {% endblock %}
 HTML
@@ -2539,6 +2562,76 @@ echo "Running migrations..."
 python manage.py makemigrations accounts settingsapp courses payments tickets dashboard --noinput || true
 python manage.py migrate --noinput
 
+echo "Fixing database schema (adding missing columns)..."
+python manage.py shell <<'PYFIX'
+import os
+import MySQLdb
+
+db_config = {
+    'host': os.getenv('DB_HOST', 'db'),
+    'user': os.getenv('DB_USER'),
+    'passwd': os.getenv('DB_PASSWORD'),
+    'db': os.getenv('DB_NAME'),
+    'port': int(os.getenv('DB_PORT', 3306))
+}
+
+def column_exists(cursor, table, column):
+    cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+    return cursor.fetchone() is not None
+
+def table_exists(cursor, table):
+    cursor.execute(f"SHOW TABLES LIKE '{table}'")
+    return cursor.fetchone() is not None
+
+try:
+    conn = MySQLdb.connect(**db_config)
+    cursor = conn.cursor()
+
+    # Add extra_data to accounts_userprofile
+    if table_exists(cursor, 'accounts_userprofile'):
+        if not column_exists(cursor, 'accounts_userprofile', 'extra_data'):
+            cursor.execute("ALTER TABLE accounts_userprofile ADD COLUMN extra_data JSON DEFAULT NULL")
+            print("Added extra_data column to accounts_userprofile")
+
+    # Add allow_profile_edit to settingsapp_sitesetting
+    if table_exists(cursor, 'settingsapp_sitesetting'):
+        if not column_exists(cursor, 'settingsapp_sitesetting', 'allow_profile_edit'):
+            cursor.execute("ALTER TABLE settingsapp_sitesetting ADD COLUMN allow_profile_edit TINYINT(1) DEFAULT 1")
+            print("Added allow_profile_edit column to settingsapp_sitesetting")
+        if not column_exists(cursor, 'settingsapp_sitesetting', 'allow_security_edit'):
+            cursor.execute("ALTER TABLE settingsapp_sitesetting ADD COLUMN allow_security_edit TINYINT(1) DEFAULT 1")
+            print("Added allow_security_edit column to settingsapp_sitesetting")
+
+    # Create settingsapp_registrationfield table if not exists
+    if not table_exists(cursor, 'settingsapp_registrationfield'):
+        cursor.execute("""
+            CREATE TABLE settingsapp_registrationfield (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                field_key VARCHAR(50) UNIQUE NOT NULL,
+                label VARCHAR(150) NOT NULL,
+                field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+                placeholder VARCHAR(200) DEFAULT '',
+                help_text VARCHAR(300) DEFAULT '',
+                choices TEXT,
+                is_required TINYINT(1) DEFAULT 0,
+                is_active TINYINT(1) DEFAULT 1,
+                is_system TINYINT(1) DEFAULT 0,
+                show_in_profile TINYINT(1) DEFAULT 1,
+                `order` INT UNSIGNED DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        """)
+        print("Created settingsapp_registrationfield table")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Database schema fix completed.")
+except Exception as e:
+    print(f"Database schema fix error (may be ok): {e}")
+PYFIX
+
 echo "Seeding database..."
 python manage.py shell <<'PY'
 import os
@@ -2546,7 +2639,7 @@ import traceback
 
 try:
     from django.contrib.auth import get_user_model
-    from settingsapp.models import SiteSetting, TemplateText, RegistrationField
+    from settingsapp.models import SiteSetting, TemplateText
     from payments.models import BankTransferSetting
     from accounts.models import SecurityQuestion, UserProfile
 
@@ -2568,18 +2661,22 @@ try:
     print("Security questions seeded.")
 
     # Seed default registration fields (system fields that cannot be deleted)
-    default_fields = [
-        {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
-        {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
-        {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
-        {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
-        {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
-    ]
-    for f in default_fields:
-        RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
-    print("Registration fields seeded.")
+    try:
+        from settingsapp.models import RegistrationField
+        default_fields = [
+            {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
+            {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
+            {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
+            {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
+            {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
+        ]
+        for f in default_fields:
+            RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
+        print("Registration fields seeded.")
+    except Exception as e:
+        print(f"Registration fields seed skipped: {e}")
 
-    s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path,"allow_profile_edit":True})
+    s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path})
     if not s.admin_path:
         s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
     print("Site settings seeded.")
