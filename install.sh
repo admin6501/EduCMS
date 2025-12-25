@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# EduCMS - Full Installer (Compact, Latest) - 2025-12-25
-# شامل: فراموشی رمز با سوالات امنیتی، ویرایش پروفایل، مدیریت سوالات امنیتی، کیف پول، فاکتور، RTL + Responsive + UI مدرن
-# مسیر نصب: /opt/educms
-
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -232,7 +228,6 @@ NGINX
 }
 
 write_project(){
-  # Dockerfile + requirements
   cat > app/Dockerfile <<'DOCKER'
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
@@ -256,9 +251,7 @@ mysqlclient>=2.2
 Pillow>=10.0
 REQ
 
-  # manage.py / wsgi
   cat > app/manage.py <<'PY'
-#!/usr/bin/env python
 import os, sys
 def main():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE","educms.settings")
@@ -276,7 +269,6 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE","educms.settings")
 application = get_wsgi_application()
 PY
 
-  # settings.py (RTL + security + apps)
   cat > app/educms/settings.py <<'PY'
 from pathlib import Path
 import os
@@ -365,7 +357,6 @@ SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "SAMEORIGIN"
 PY
 
-  # urls.py (wallet + invoices + dashboard)
   cat > app/educms/urls.py <<'PY'
 from django.contrib import admin
 from django.urls import path, include
@@ -393,7 +384,6 @@ if settings.DEBUG:
   urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 PY
 
-  # ---------- accounts ----------
   cat > app/accounts/apps.py <<'PY'
 from django.apps import AppConfig
 class AccountsConfig(AppConfig):
@@ -415,7 +405,6 @@ class User(AbstractUser):
   username = models.CharField(_("نام کاربری"), max_length=150, unique=True, blank=True)
 
   def save(self, *args, **kwargs):
-    # If user was created via email-only registration, auto-generate a unique username
     if not (self.username or "").strip():
       local = (self.email or "user").split("@")[0].strip() or "user"
       base = slugify(local, allow_unicode=False) or "user"
@@ -469,52 +458,43 @@ PY
   cat > app/accounts/admin.py <<'PY'
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils.translation import gettext_lazy as _
-from .models import User, SecurityQuestion, UserProfile
-
-@admin.register(SecurityQuestion)
-class SecurityQuestionAdmin(admin.ModelAdmin):
-  list_display = ("id","title","is_active")
-  list_filter = ("is_active",)
-  search_fields = ("title",)
+from .models import User, UserProfile, SecurityQuestion
 
 class UserProfileInline(admin.StackedInline):
-  model = UserProfile
-  can_delete = False
-  extra = 0
-  verbose_name = _("پروفایل")
-  verbose_name_plural = _("پروفایل")
-  readonly_fields = ("updated_at",)
-  fieldsets = (
-    (_("اطلاعات پروفایل"), {"fields": ("phone","bio","updated_at")}),
-    (_("سوالات امنیتی"), {"fields": ("q1","q2")}),
-  )
+    model = UserProfile
+    extra = 0
+    can_delete = False
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-  ordering = ("-date_joined",)
-  list_display = ("email","username","is_staff","is_superuser","is_active","date_joined")
-  list_filter = ("is_staff","is_superuser","is_active","groups")
-  search_fields = ("email","username","first_name","last_name")
-  readonly_fields = ("last_login","date_joined")
-  inlines = [UserProfileInline]
+    list_display = ("email","is_staff","is_superuser","is_active","date_joined")
+    list_filter = ("is_staff","is_superuser","is_active","groups")
+    search_fields = ("email","username")
+    ordering = ("email",)
+    inlines = [UserProfileInline]
 
-  fieldsets = (
-    (None, {"fields": ("email","username","password")}),
-    (_("اطلاعات شخصی"), {"fields": ("first_name","last_name")}),
-    (_("سطح دسترسی"), {"fields": ("is_active","is_staff","is_superuser","groups","user_permissions")}),
-    (_("تاریخ‌ها"), {"fields": ("last_login","date_joined")}),
-  )
+    fieldsets = (
+        (None, {"fields": ("email","password")}),
+        ("اطلاعات پایه", {"fields": ("username","first_name","last_name","is_active")}),
+        ("دسترسی‌ها", {"fields": ("is_staff","is_superuser","groups","user_permissions")}),
+        ("زمان‌ها", {"fields": ("last_login","date_joined")}),
+    )
+    add_fieldsets = (
+        (None, {"classes": ("wide",), "fields": ("email","username","password1","password2")}),
+    )
 
-  add_fieldsets = (
-    (None, {"classes": ("wide",), "fields": ("email","username","password1","password2","is_staff","is_superuser","is_active")}),
-  )
+@admin.register(SecurityQuestion)
+class SecurityQuestionAdmin(admin.ModelAdmin):
+    list_display = ("id","text","is_active")
+    list_filter = ("is_active",)
+    search_fields = ("text",)
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-  list_display = ("user","phone","updated_at")
-  search_fields = ("user__email","user__username","phone")
-  list_select_related = ("user",)
+    list_display = ("user","phone_number","security_question_1","security_question_2","updated_at")
+    list_select_related = ("user","security_question_1","security_question_2")
+    search_fields = ("user__email","user__username","phone_number")
+
 PY
   cat > app/accounts/forms.py <<'PY'
 from django import forms
@@ -546,7 +526,7 @@ class RegisterForm(UserCreationForm):
     )
 
     security_question = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order","title"),
+        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order","text"),
         required=True,
         empty_label=_("انتخاب کنید"),
         label=_("سوال امنیتی"),
@@ -574,7 +554,6 @@ class RegisterForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Force field order (email -> security -> passwords)
         ordered = ["email", "security_question", "security_answer", "password1", "password2"]
         self.order_fields(ordered)
 
@@ -597,7 +576,6 @@ class RegisterForm(UserCreationForm):
         user.email = (self.cleaned_data.get("email") or "").strip().lower()
         if commit:
             user.save()
-            # Ensure profile + save security Q/A1
             prof, _ = UserProfile.objects.get_or_create(user=user)
             prof.q1 = self.cleaned_data.get("security_question")
             ans = (self.cleaned_data.get("security_answer") or "").strip().lower()
@@ -621,7 +599,6 @@ class EmailOrUsernameBackend(ModelBackend):
     try:
       user = UserModel.objects.get(Q(username__iexact=identifier) | Q(email__iexact=identifier))
     except UserModel.DoesNotExist:
-      # mitigate timing attacks
       UserModel().set_password(password)
       return None
     if user.check_password(password) and self.user_can_authenticate(user):
@@ -735,7 +712,6 @@ urlpatterns=[
 ]
 PY
 
-  # ---------- settingsapp (admin path + context) ----------
   cat > app/settingsapp/apps.py <<'PY'
 from django.apps import AppConfig
 class SettingsappConfig(AppConfig):
@@ -894,7 +870,6 @@ class AdminAliasMiddleware(MiddlewareMixin):
     return None
 PY
 
-  # ---------- courses (minimal with access) ----------
   cat > app/courses/apps.py <<'PY'
 from django.apps import AppConfig
 class CoursesConfig(AppConfig):
@@ -992,7 +967,6 @@ class CourseDetailView(DetailView):
     return ctx
 PY
 
-  # ---------- dashboard ----------
   cat > app/dashboard/apps.py <<'PY'
 from django.apps import AppConfig
 class DashboardConfig(AppConfig):
@@ -1021,7 +995,6 @@ from .views import dashboard_home
 urlpatterns=[path("", dashboard_home, name="dashboard_home")]
 PY
 
-  # ---------- payments: orders + wallet + invoices ----------
   cat > app/payments/apps.py <<'PY'
 from django.apps import AppConfig
 class PaymentsConfig(AppConfig):
@@ -1447,7 +1420,6 @@ from .views import invoice_list, invoice_detail
 urlpatterns=[path("", invoice_list, name="invoice_list"), path("<uuid:order_id>/", invoice_detail, name="invoice_detail")]
 PY
 
-  # ---------- tickets ----------
   cat > app/tickets/apps.py <<'PY'
 from django.apps import AppConfig
 class TicketsConfig(AppConfig):
@@ -1555,7 +1527,6 @@ from .views import ticket_list, ticket_create, ticket_detail
 urlpatterns=[path("",ticket_list,name="ticket_list"), path("new/",ticket_create,name="ticket_create"), path("<uuid:ticket_id>/",ticket_detail,name="ticket_detail")]
 PY
 
-  # --------- Templates (compact but modern) ---------
   cat > app/templates/partials/form_errors.html <<'HTML'
 {% if form.non_field_errors %}
   <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
@@ -1652,7 +1623,6 @@ HTML
 </html>
 HTML
 
-  # pages: dashboard / courses / accounts / orders / wallet / invoices / tickets
   cat > app/templates/dashboard/home.html <<'HTML'
 {% extends "base.html" %}
 {% block title %}داشبورد{% endblock %}
@@ -2169,9 +2139,7 @@ HTML
 {% endblock %}
 HTML
 
-  # ---------- entrypoint ----------
   cat > app/entrypoint.sh <<'SH'
-#!/usr/bin/env sh
 set -e
 sleep 2
 
@@ -2263,6 +2231,29 @@ do_install(){
   echo "Invoices: https://${DOMAIN}/invoices/"
 }
 
+
+do_patch(){
+  require_root
+  [[ -d "$APP_DIR" ]] || die "Not installed: $APP_DIR"
+  [[ -f "$ENV_FILE" ]] || die ".env not found: $ENV_FILE"
+  install_base
+  install_docker
+  ensure_dirs
+  write_compose
+  write_project
+  cd "$APP_DIR"
+  docker compose up -d --build db web nginx
+  if ! docker compose ps web | grep -q "Up"; then
+    docker compose logs --tail=200 web || true
+    die "web is not running"
+  fi
+  docker compose restart nginx || true
+  echo "Patched and restarted."
+}
+
+
+do_start(){ compose_cd_or_fail; docker compose up -d >/dev/null 2>&1 || docker compose up -d; ok "Started."; }
+
 do_stop(){ cd "$APP_DIR" && docker compose down --remove-orphans || true; }
 do_restart(){ cd "$APP_DIR" && docker compose up -d --build; }
 
@@ -2320,22 +2311,23 @@ menu_header(){
 }
 
 menu_show(){
-  echo "1) Install (نصب کامل)"
-  echo "2) Stop (توقف)"
-  echo "3) Restart (ری‌استارت)"
-  echo "4) Uninstall (حذف کامل)"
-  echo "5) Backup DB (.sql)"
-  echo "6) Restore DB (.sql)"
+  echo "1) Install"
+  echo "2) Start"
+  echo "3) Stop"
+  echo "4) Restart"
+  echo "5) Patch/Repair"
+  echo "6) Backup DB"
+  echo "7) Restore DB"
+  echo "8) Uninstall"
   echo "0) Exit"
-  echo
 }
 
 main(){
   require_root
 
-  # If called with CLI args, do quick actions.
   if [[ ${#} -gt 0 ]]; then
     case "${1:-}" in
+      start) do_start ;;
       install) do_install ;;
       stop) do_stop ;;
       restart) do_restart ;;
@@ -2356,12 +2348,13 @@ main(){
     menu_show
     read -r -p "Select: " c </dev/tty || c=""
     case "${c:-}" in
+      2) do_start ;;
       1) do_install ;;
-      2) do_stop ;;
-      3) do_restart ;;
-      4) do_uninstall ;;
-      5) backup_db ;;
-      6)
+      3) do_stop ;;
+      4) do_restart ;;
+      5) do_uninstall ;;
+      6) backup_db ;;
+      7)
         p="$(read_line "Path to .sql file (e.g. /opt/educms/backups/file.sql): ")"
         restore_db "$p"
         ;;
