@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}پرداخت{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-bold">پرداخت</h1>
+    <div class="text-sm text-slate-500 dark:text-slate-300">دوره: <b>{{ course.title }}</b></div>
+  </div>
+
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950 space-y-4">
+    <form method="post" class="space-y-3">{% csrf_token %}
+      <div class="text-sm font-semibold">کد تخفیف</div>
+      <div class="flex gap-2">
+        <div class="flex-1">{{ coupon_form.coupon_code }}</div>
+        <button name="apply_coupon" value="1" class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900">اعمال</button>
+      </div>
+      <div class="text-xs text-slate-500 dark:text-slate-300">{% if first_purchase_eligible %}در صورت عدم وارد کردن کد، ممکن است تخفیف خرید اول اعمال شود.{% endif %}</div>
+    </form>
+
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900/40">
+      پایه: <b>{{ order.amount }}</b> | تخفیف: <b>{{ order.discount_amount }}</b> {% if discount_label %}({{ discount_label }}){% endif %} |
+      نهایی: <b>{{ order.final_amount }}</b> تومان
+    </div>
+
+    <div class="grid gap-3 md:grid-cols-2">
+      <a class="rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/receipt/{{ order.id }}/">آپلود رسید کارت‌به‌کارت</a>
+      <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+        <div class="text-sm font-semibold">پرداخت با کیف پول</div>
+        <div class="text-sm text-slate-500 dark:text-slate-300 mt-1">موجودی: <b>{{ wallet.balance }}</b> تومان</div>
+        <form method="post" class="mt-3">{% csrf_token %}
+          <button name="pay_wallet" value="1" class="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-95">پرداخت با کیف پول</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 p-4 text-sm dark:border-slate-800">
+      <div class="font-semibold mb-1">اطلاعات کارت</div>
+      نام: <b>{{ setting.account_holder|default:"-" }}</b><br>
+      کارت: <b dir="ltr">{{ setting.card_number|default:"-" }}</b>
+      {% if setting.note %}<div class="mt-2 text-xs text-slate-500 dark:text-slate-300">{{ setting.note }}</div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

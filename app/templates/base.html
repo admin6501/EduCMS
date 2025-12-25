@@ -1,0 +1,77 @@
+{% load static %}
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <script>tailwind=window.tailwind||{};tailwind.config={darkMode:'class'};</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  {% if site_settings.favicon %}<link rel="icon" href="{{ site_settings.favicon.url }}">{% endif %}
+  <title>{% block title %}{{ site_settings.brand_name|default:"EduCMS" }}{% endblock %}</title>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 dark:from-slate-950 dark:to-slate-950 dark:text-slate-100">
+<script>
+(function(){
+  const root=document.documentElement;
+  function apply(m){ root.classList.remove('dark'); if(m==='dark') root.classList.add('dark');
+    if(m==='system'){ const d=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches; if(d) root.classList.add('dark'); } }
+  const initial=localStorage.getItem('theme_mode')||'{{ site_settings.default_theme|default:"system" }}'; apply(initial);
+  window.__setTheme=(m)=>{localStorage.setItem('theme_mode',m);apply(m);};
+})();
+</script>
+
+<header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/75">
+  <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-3">
+    <a href="/" class="flex items-center gap-3">
+      {% if site_settings.logo %}<img src="{{ site_settings.logo.url }}" class="h-9 w-auto" alt="{{ site_settings.brand_name }}">{% else %}
+      <div class="h-9 w-9 rounded-2xl bg-slate-900 dark:bg-white"></div>{% endif %}
+      <span class="font-extrabold text-xl tracking-tight">{{ site_settings.brand_name|default:"EduCMS" }}</span>
+    </a>
+
+    <div class="flex items-center gap-2 text-sm">
+      <div class="hidden sm:flex items-center gap-1 rounded-2xl border border-slate-200 bg-white px-1 py-1 dark:border-slate-700 dark:bg-slate-900">
+        <button type="button" class="px-3 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800" onclick="__setTheme('light')">لایت</button>
+        <button type="button" class="px-3 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800" onclick="__setTheme('dark')">دارک</button>
+        <button type="button" class="px-3 py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800" onclick="__setTheme('system')">سیستم</button>
+      </div>
+
+      {% if user.is_authenticated %}
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/dashboard/">داشبورد</a>
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/wallet/">کیف پول</a>
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/invoices/">فاکتورها</a>
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/orders/my/">سفارش‌ها</a>
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/tickets/">تیکت‌ها</a>
+        <a class="rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900" href="/accounts/profile/">پروفایل</a>
+        <form method="post" action="/accounts/logout/" class="inline">{% csrf_token %}
+          <button class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900">خروج</button>
+        </form>
+        {% if user.is_staff %}
+          <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900"
+             href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
+        {% endif %}
+      {% else %}
+        <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/login/">ورود</a>
+        <a class="rounded-xl bg-slate-900 px-3 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/accounts/register/">ثبت‌نام</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 py-8">
+  {% if messages %}
+    <div class="mb-5 space-y-2">
+      {% for m in messages %}
+        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-800 dark:bg-slate-950">{{ m }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="border-t border-slate-200/70 bg-white dark:border-slate-800 dark:bg-slate-950">
+  <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500 dark:text-slate-300">
+    {{ site_settings.footer_text|default:"© تمامی حقوق محفوظ است." }}
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}پروفایل{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
+
+    {% if not allow_edit %}
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+        <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
+        <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
+      </div>
+    {% else %}
+      <form method="post" class="space-y-4">{% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="text-sm font-medium">شماره تماس</label>
+            <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
+          </div>
+          <div><label class="text-sm font-medium">بیو</label>
+            <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
+          </div>
+        </div>
+        <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <!-- Security Questions Info -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h2 class="text-lg font-bold mb-4">سوالات امنیتی</h2>
+    {% if profile.q1 or profile.q2 %}
+      <div class="space-y-3 text-sm">
+        {% if profile.q1 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۱</div>
+            <div class="font-medium">{{ profile.q1.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
+        {% if profile.q2 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۲</div>
+            <div class="font-medium">{{ profile.q2.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="text-slate-500 dark:text-slate-400 text-sm">
+        سوالات امنیتی تنظیم نشده است. برای امنیت بیشتر، سوالات امنیتی خود را تنظیم کنید.
+      </div>
+    {% endif %}
+    <div class="mt-4">
+      <a class="inline-block rounded-xl border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/security/">مدیریت سوالات امنیتی</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

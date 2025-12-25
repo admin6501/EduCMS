@@ -1,0 +1,7 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div style="max-width:720px">
+  <h1>تغییر نام کاربری و رمز ادمین</h1>
+  <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit" class="default">ذخیره</button></form>
+</div>
+{% endblock %}

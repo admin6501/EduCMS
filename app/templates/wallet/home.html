@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}کیف پول{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-extrabold">کیف پول</h1>
+        <div class="text-sm text-slate-500 dark:text-slate-300">موجودی: <b>{{ wallet.balance }}</b> تومان</div>
+      </div>
+      <a class="rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/wallet/topup/">درخواست شارژ</a>
+    </div>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-2">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+      <h2 class="font-bold mb-3">تراکنش‌ها</h2>
+      <div class="space-y-2 text-sm">
+        {% for t in txns %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800 flex items-center justify-between">
+            <div>{{ t.get_kind_display }}</div>
+            <div class="{% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">{% if t.amount >= 0 %}+{% endif %}{{ t.amount }}</div>
+          </div>
+        {% empty %}<div class="text-slate-500 dark:text-slate-300">تراکنشی ندارید.</div>{% endfor %}
+      </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+      <h2 class="font-bold mb-3">درخواست‌های شارژ</h2>
+      <div class="space-y-2 text-sm">
+        {% for r in topups %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800 flex items-center justify-between">
+            <div><b>{{ r.amount }}</b> تومان</div><div>{{ r.get_status_display }}</div>
+          </div>
+        {% empty %}<div class="text-slate-500 dark:text-slate-300">درخواستی ندارید.</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
