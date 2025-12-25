@@ -452,6 +452,7 @@ class UserProfile(models.Model):
   q2 = models.ForeignKey(SecurityQuestion, on_delete=models.SET_NULL, null=True, blank=True, related_name="p_q2", verbose_name=_("سوال ۲"))
   a1_hash = models.CharField(max_length=200, blank=True, verbose_name=_("هش پاسخ ۱"))
   a2_hash = models.CharField(max_length=200, blank=True, verbose_name=_("هش پاسخ ۲"))
+  extra_data = models.JSONField(default=dict, blank=True, verbose_name=_("داده‌های اضافی"))
   updated_at = models.DateTimeField(auto_now=True)
 
   class Meta:
@@ -503,9 +504,69 @@ class SecurityQuestionAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user","phone","q1","q2","updated_at")
-    list_select_related = ("user","q1","q2")
-    search_fields = ("user__email","user__username","phone")
+    list_display = ("user", "phone", "security_q1", "security_q2", "has_answers", "updated_at")
+    list_select_related = ("user", "q1", "q2")
+    search_fields = ("user__email", "user__username", "phone")
+    readonly_fields = ("security_info_display", "extra_data_display")
+    
+    fieldsets = (
+        ("اطلاعات کاربر", {"fields": ("user", "phone", "bio")}),
+        ("سوالات امنیتی", {"fields": ("q1", "q2", "security_info_display")}),
+        ("داده‌های اضافی", {"fields": ("extra_data_display",)}),
+    )
+
+    def security_q1(self, obj):
+        return obj.q1.text if obj.q1 else "-"
+    security_q1.short_description = "سوال امنیتی ۱"
+
+    def security_q2(self, obj):
+        return obj.q2.text if obj.q2 else "-"
+    security_q2.short_description = "سوال امنیتی ۲"
+
+    def has_answers(self, obj):
+        return bool(obj.a1_hash and obj.a2_hash)
+    has_answers.boolean = True
+    has_answers.short_description = "پاسخ‌ها تنظیم شده"
+
+    def security_info_display(self, obj):
+        from django.utils.html import format_html
+        html = "<div style='background:#f8f9fa;padding:10px;border-radius:5px;'>"
+        
+        if obj.q1:
+            html += f"<p><b>سوال ۱:</b> {obj.q1.text}</p>"
+            html += f"<p><b>پاسخ ۱:</b> {'✅ تنظیم شده (هش شده)' if obj.a1_hash else '❌ تنظیم نشده'}</p>"
+        else:
+            html += "<p><b>سوال ۱:</b> تنظیم نشده</p>"
+            
+        if obj.q2:
+            html += f"<p><b>سوال ۲:</b> {obj.q2.text}</p>"
+            html += f"<p><b>پاسخ ۲:</b> {'✅ تنظیم شده (هش شده)' if obj.a2_hash else '❌ تنظیم نشده'}</p>"
+        else:
+            html += "<p><b>سوال ۲:</b> تنظیم نشده</p>"
+            
+        html += "<p style='color:#666;font-size:0.9em;margin-top:10px;'>⚠️ پاسخ‌های امنیتی به صورت هش شده ذخیره می‌شوند و قابل مشاهده نیستند.</p>"
+        html += "</div>"
+        return format_html(html)
+    security_info_display.short_description = "اطلاعات امنیتی"
+
+    def has_extra_data(self, obj):
+        try:
+            return bool(obj.extra_data)
+        except Exception:
+            return False
+    has_extra_data.boolean = True
+    has_extra_data.short_description = "داده اضافی"
+
+    def extra_data_display(self, obj):
+        try:
+            if not obj.extra_data:
+                return "-"
+            from django.utils.html import format_html
+            lines = [f"<b>{k}:</b> {v}" for k, v in obj.extra_data.items()]
+            return format_html("<br>".join(lines))
+        except Exception:
+            return "-"
+    extra_data_display.short_description = "داده‌های اضافی"
 
 PY
   cat > app/accounts/forms.py <<'PY'
@@ -520,6 +581,50 @@ from .models import UserProfile, SecurityQuestion
 User = get_user_model()
 
 _INPUT = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700"
+
+def get_registration_fields():
+    """Get active registration fields from database"""
+    try:
+        from settingsapp.models import RegistrationField
+        return list(RegistrationField.objects.filter(is_active=True).order_by("order", "id"))
+    except Exception:
+        return []
+
+def build_form_field(reg_field):
+    """Build a Django form field from a RegistrationField model instance"""
+    attrs = {"class": _INPUT}
+    if reg_field.placeholder:
+        attrs["placeholder"] = reg_field.placeholder
+    if reg_field.field_type in ("email", "phone", "password", "text"):
+        attrs["dir"] = "ltr"
+
+    field_kwargs = {
+        "label": reg_field.label,
+        "required": reg_field.is_required,
+        "help_text": reg_field.help_text or "",
+    }
+
+    if reg_field.field_type == "text":
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "email":
+        attrs["autocomplete"] = "email"
+        return forms.EmailField(widget=forms.EmailInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "phone":
+        attrs["autocomplete"] = "tel"
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "textarea":
+        attrs["rows"] = 3
+        return forms.CharField(widget=forms.Textarea(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "select":
+        choices = [("", _("انتخاب کنید"))] + [(c, c) for c in reg_field.get_choices_list()]
+        return forms.ChoiceField(choices=choices, widget=forms.Select(attrs=attrs), **field_kwargs)
+    elif reg_field.field_type == "checkbox":
+        return forms.BooleanField(widget=forms.CheckboxInput(attrs={"class": "rounded"}), **field_kwargs)
+    elif reg_field.field_type == "password":
+        attrs["autocomplete"] = "new-password"
+        return forms.CharField(widget=forms.PasswordInput(attrs=attrs), **field_kwargs)
+    else:
+        return forms.CharField(widget=forms.TextInput(attrs=attrs), **field_kwargs)
 
 class LoginForm(AuthenticationForm):
     username = forms.CharField(
@@ -538,7 +643,7 @@ class RegisterForm(UserCreationForm):
     )
 
     security_question = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order","text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         empty_label=_("انتخاب کنید"),
         label=_("سوال امنیتی"),
@@ -565,8 +670,30 @@ class RegisterForm(UserCreationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._dynamic_fields = []
 
+        # Set the queryset dynamically to avoid issues when table doesn't exist
+        try:
+            self.fields['security_question'].queryset = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
+        except Exception:
+            pass
+
+        # Add dynamic fields from RegistrationField model
+        try:
+            for reg_field in get_registration_fields():
+                # Skip system fields that are already defined
+                if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
+                    continue
+                field = build_form_field(reg_field)
+                self.fields[f"custom_{reg_field.field_key}"] = field
+                self._dynamic_fields.append(reg_field.field_key)
+        except Exception:
+            pass  # Database might not be ready during migrations
+
+        # Reorder fields
         ordered = ["email", "security_question", "security_answer", "password1", "password2"]
+        for key in self._dynamic_fields:
+            ordered.append(f"custom_{key}")
         self.order_fields(ordered)
 
     def clean_email(self):
@@ -583,6 +710,15 @@ class RegisterForm(UserCreationForm):
             raise forms.ValidationError(_("پاسخ کوتاه است."))
         return a
 
+    def get_custom_field_data(self):
+        """Return a dict of custom field values"""
+        data = {}
+        for key in self._dynamic_fields:
+            field_name = f"custom_{key}"
+            if field_name in self.cleaned_data:
+                data[key] = self.cleaned_data[field_name]
+        return data
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = (self.cleaned_data.get("email") or "").strip().lower()
@@ -592,6 +728,14 @@ class RegisterForm(UserCreationForm):
             prof.q1 = self.cleaned_data.get("security_question")
             ans = (self.cleaned_data.get("security_answer") or "").strip().lower()
             prof.a1_hash = make_password(ans)
+
+            # Save custom fields to profile extra_data (safely)
+            try:
+                custom_data = self.get_custom_field_data()
+                if custom_data and hasattr(prof, 'extra_data'):
+                    prof.extra_data = custom_data
+            except Exception:
+                pass
             prof.save()
         return user
 
@@ -605,9 +749,43 @@ class ProfileForm(forms.ModelForm):
             "email": forms.EmailInput(attrs={"class": _INPUT, "dir": "ltr"}),
         }
 
+    def __init__(self, *args, profile=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.profile = profile
+        self._dynamic_fields = []
+
+        # Add dynamic fields that should show in profile
+        try:
+            for reg_field in get_registration_fields():
+                if not reg_field.show_in_profile:
+                    continue
+                if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
+                    continue
+                field = build_form_field(reg_field)
+                field_name = f"custom_{reg_field.field_key}"
+                self.fields[field_name] = field
+                self._dynamic_fields.append(reg_field.field_key)
+
+                # Set initial value from profile extra_data (safely)
+                if profile:
+                    extra_data = getattr(profile, 'extra_data', None) or {}
+                    if reg_field.field_key in extra_data:
+                        self.initial[field_name] = extra_data[reg_field.field_key]
+        except Exception:
+            pass
+
+    def get_custom_field_data(self):
+        """Return a dict of custom field values"""
+        data = {}
+        for key in self._dynamic_fields:
+            field_name = f"custom_{key}"
+            if field_name in self.cleaned_data:
+                data[key] = self.cleaned_data[field_name]
+        return data
+
 class SecurityQuestionsForm(forms.Form):
     q1 = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         label=_("سوال امنیتی ۱"),
         widget=forms.Select(attrs={"class": _INPUT})
@@ -618,7 +796,7 @@ class SecurityQuestionsForm(forms.Form):
         widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
     )
     q2 = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         label=_("سوال امنیتی ۲"),
         widget=forms.Select(attrs={"class": _INPUT})
@@ -632,6 +810,13 @@ class SecurityQuestionsForm(forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        # Set querysets dynamically
+        try:
+            qs = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
+            self.fields['q1'].queryset = qs
+            self.fields['q2'].queryset = qs
+        except Exception:
+            pass
 
     def clean(self):
         c = super().clean()
@@ -725,19 +910,62 @@ class RegisterView(CreateView):
 
 @login_required
 def profile_edit(request):
-  profile,_ = UserProfile.objects.get_or_create(user=request.user)
-  form = ProfileForm(request.POST or None, instance=request.user)
-  if request.method=="POST" and form.is_valid():
+  # Check if profile editing is allowed
+  allow_edit = True
+  try:
+    from settingsapp.models import SiteSetting
+    site_setting = SiteSetting.objects.first()
+    if site_setting:
+      allow_edit = getattr(site_setting, 'allow_profile_edit', True)
+  except Exception:
+    pass
+
+  if not allow_edit:
+    messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
+    # Still show security questions info even when editing is disabled
+    profile = UserProfile.objects.filter(user=request.user).select_related("q1", "q2").first()
+    return render(request, "accounts/profile.html", {"form": None, "profile": profile, "allow_edit": False})
+
+  profile, _ = UserProfile.objects.select_related("q1", "q2").get_or_create(user=request.user)
+  form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
+
+  if request.method == "POST" and form.is_valid():
     form.save()
-    profile.phone=(request.POST.get("phone") or "").strip()
-    profile.bio=(request.POST.get("bio") or "").strip()
-    profile.save(update_fields=["phone","bio"])
-    messages.success(request,"پروفایل بروزرسانی شد.")
+    profile.phone = (request.POST.get("phone") or "").strip()
+    profile.bio = (request.POST.get("bio") or "").strip()
+
+    # Save custom field data safely
+    try:
+      custom_data = form.get_custom_field_data()
+      if custom_data:
+        extra = getattr(profile, 'extra_data', None) or {}
+        extra.update(custom_data)
+        profile.extra_data = extra
+      profile.save()
+    except Exception:
+      profile.save(update_fields=["phone", "bio"])
+
+    messages.success(request, "پروفایل بروزرسانی شد.")
     return redirect("profile_edit")
-  return render(request,"accounts/profile.html",{"form":form,"profile":profile})
+
+  return render(request, "accounts/profile.html", {"form": form, "profile": profile, "allow_edit": True})
 
 @login_required
 def security_questions(request):
+  # Check if security questions editing is allowed
+  allow_edit = True
+  try:
+    from settingsapp.models import SiteSetting
+    site_setting = SiteSetting.objects.first()
+    if site_setting:
+      allow_edit = getattr(site_setting, 'allow_security_edit', True)
+  except Exception:
+    pass
+
+  if not allow_edit:
+    messages.error(request, "تغییر سوالات امنیتی توسط مدیر غیرفعال شده است.")
+    return render(request, "accounts/security_questions.html", {"form": None, "allow_edit": False})
+
   profile,_ = UserProfile.objects.get_or_create(user=request.user)
   init={}
   if profile.q1: init["q1"]=profile.q1
@@ -749,7 +977,7 @@ def security_questions(request):
     profile.save(update_fields=["q1","q2","a1_hash","a2_hash"])
     messages.success(request,"سوالات امنیتی بروزرسانی شد.")
     return redirect("security_questions")
-  return render(request,"accounts/security_questions.html",{"form":form})
+  return render(request,"accounts/security_questions.html",{"form":form, "allow_edit": True})
 
 def reset_step1(request):
   form=ResetStep1Form(request.POST or None)
@@ -821,10 +1049,54 @@ class SiteSetting(models.Model):
   default_theme = models.CharField(max_length=10, choices=THEME_MODE, default="system", verbose_name=_("تم پیش‌فرض"))
   footer_text = models.TextField(blank=True, verbose_name=_("متن فوتر"))
   admin_path = models.SlugField(max_length=50, default="admin", verbose_name=_("مسیر ادمین"))
+  allow_profile_edit = models.BooleanField(default=True, verbose_name=_("اجازه ویرایش پروفایل توسط کاربران"))
+  allow_security_edit = models.BooleanField(default=True, verbose_name=_("اجازه تغییر سوالات امنیتی توسط کاربران"))
   updated_at = models.DateTimeField(auto_now=True)
   class Meta:
     verbose_name=_("تنظیمات سایت"); verbose_name_plural=_("تنظیمات سایت")
   def __str__(self): return "Site Settings"
+
+class RegistrationFieldType(models.TextChoices):
+  TEXT = "text", _("متن کوتاه")
+  EMAIL = "email", _("ایمیل")
+  PHONE = "phone", _("شماره تلفن")
+  TEXTAREA = "textarea", _("متن بلند")
+  SELECT = "select", _("انتخابی")
+  CHECKBOX = "checkbox", _("چک‌باکس")
+  PASSWORD = "password", _("رمز عبور")
+
+class RegistrationField(models.Model):
+  field_key = models.SlugField(max_length=50, unique=True, verbose_name=_("کلید فیلد"))
+  label = models.CharField(max_length=150, verbose_name=_("برچسب"))
+  field_type = models.CharField(max_length=20, choices=RegistrationFieldType.choices, default=RegistrationFieldType.TEXT, verbose_name=_("نوع فیلد"))
+  placeholder = models.CharField(max_length=200, blank=True, verbose_name=_("متن راهنما"))
+  help_text = models.CharField(max_length=300, blank=True, verbose_name=_("متن کمکی"))
+  choices = models.TextField(blank=True, verbose_name=_("گزینه‌ها"), help_text=_("هر گزینه در یک خط (فقط برای فیلد انتخابی)"))
+  is_required = models.BooleanField(default=False, verbose_name=_("اجباری"))
+  is_active = models.BooleanField(default=True, verbose_name=_("فعال"))
+  is_system = models.BooleanField(default=False, verbose_name=_("فیلد سیستمی"), help_text=_("فیلدهای سیستمی قابل حذف یا غیرفعال‌سازی نیستند"))
+  show_in_profile = models.BooleanField(default=True, verbose_name=_("نمایش در پروفایل"))
+  order = models.PositiveIntegerField(default=0, verbose_name=_("ترتیب"))
+  created_at = models.DateTimeField(auto_now_add=True)
+  updated_at = models.DateTimeField(auto_now=True)
+
+  class Meta:
+    ordering = ["order", "id"]
+    verbose_name = _("فیلد ثبت‌نام")
+    verbose_name_plural = _("فیلدهای ثبت‌نام")
+
+  def __str__(self):
+    return f"{self.label} ({self.field_key})"
+
+  def get_choices_list(self):
+    if not self.choices:
+      return []
+    return [c.strip() for c in self.choices.strip().split("\n") if c.strip()]
+
+  def save(self, *args, **kwargs):
+    if self.is_system:
+      self.is_active = True
+    super().save(*args, **kwargs)
 
 class TemplateText(models.Model):
   key=models.SlugField(max_length=150, unique=True)
@@ -848,21 +1120,46 @@ class NavLink(models.Model):
 PY
   cat > app/settingsapp/admin.py <<'PY'
 from django.contrib import admin
-from .models import SiteSetting, TemplateText, NavLink
+
 admin.site.site_header="پنل مدیریت"
 admin.site.site_title="پنل مدیریت"
 admin.site.index_title="مدیریت سایت"
-admin.site.register(SiteSetting)
+
+from .models import SiteSetting, TemplateText, NavLink
+
+# Very simple admin for SiteSetting
+@admin.register(SiteSetting)
+class SiteSettingAdmin(admin.ModelAdmin):
+    pass
+
 admin.site.register(TemplateText)
 admin.site.register(NavLink)
+
+# Register RegistrationField only if table exists
+try:
+    from .models import RegistrationField
+    
+    @admin.register(RegistrationField)
+    class RegistrationFieldAdmin(admin.ModelAdmin):
+        list_display = ("label", "field_key", "field_type", "order")
+        search_fields = ("field_key", "label")
+        ordering = ("order",)
+except Exception:
+    pass
 PY
   cat > app/settingsapp/context_processors.py <<'PY'
 from .models import SiteSetting, TemplateText, NavLink
 def site_context(request):
-  s = SiteSetting.objects.first()
-  texts = {t.key: t.value for t in TemplateText.objects.all()}
-  header_links = list(NavLink.objects.filter(area="header", is_active=True).order_by("order"))
-  footer_links = list(NavLink.objects.filter(area="footer", is_active=True).order_by("order"))
+  try:
+    s = SiteSetting.objects.first()
+    texts = {t.key: t.value for t in TemplateText.objects.all()}
+    header_links = list(NavLink.objects.filter(area="header", is_active=True).order_by("order"))
+    footer_links = list(NavLink.objects.filter(area="footer", is_active=True).order_by("order"))
+  except Exception:
+    s = None
+    texts = {}
+    header_links = []
+    footer_links = []
   return {"site_settings": s, "tpl": texts, "header_links": header_links, "footer_links": footer_links}
 PY
   cat > app/settingsapp/forms.py <<'PY'
@@ -938,12 +1235,15 @@ from .models import SiteSetting
 
 def _get_admin_path():
   key="site_admin_path"
-  v=cache.get(key)
-  if v: return v
-  s=SiteSetting.objects.first()
-  v=(getattr(s,"admin_path",None) or "admin").strip().strip("/") or "admin"
-  cache.set(key,v,60)
-  return v
+  try:
+    v=cache.get(key)
+    if v: return v
+    s=SiteSetting.objects.first()
+    v=(getattr(s,"admin_path",None) or "admin").strip().strip("/") or "admin"
+    cache.set(key,v,60)
+    return v
+  except Exception:
+    return "admin"
 
 class AdminAliasMiddleware(MiddlewareMixin):
   def process_request(self, request):
@@ -1000,22 +1300,26 @@ class Course(models.Model):
 
 class Enrollment(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-  course=models.ForeignKey(Course, on_delete=models.CASCADE)
-  is_active=models.BooleanField(default=True)
-  source=models.CharField(max_length=30, default="paid")
-  created_at=models.DateTimeField(auto_now_add=True)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name=_("کاربر"))
+  course=models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name=_("دوره"))
+  is_active=models.BooleanField(default=True, verbose_name=_("فعال"))
+  source=models.CharField(max_length=30, default="paid", verbose_name=_("منبع"))
+  created_at=models.DateTimeField(auto_now_add=True, verbose_name=_("تاریخ ثبت"))
   class Meta:
     unique_together=[("user","course")]
+    verbose_name=_("ثبت‌نام دوره")
+    verbose_name_plural=_("ثبت‌نام‌های دوره")
 
 class CourseGrant(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-  course=models.ForeignKey(Course, on_delete=models.CASCADE)
-  is_active=models.BooleanField(default=True)
-  reason=models.CharField(max_length=200, blank=True)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name=_("کاربر"))
+  course=models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name=_("دوره"))
+  is_active=models.BooleanField(default=True, verbose_name=_("فعال"))
+  reason=models.CharField(max_length=200, blank=True, verbose_name=_("دلیل"))
   class Meta:
     unique_together=[("user","course")]
+    verbose_name=_("دسترسی اهدایی")
+    verbose_name_plural=_("دسترسی‌های اهدایی")
 PY
   cat > app/courses/access.py <<'PY'
 from .models import Enrollment, CourseGrant
@@ -1029,9 +1333,27 @@ PY
   cat > app/courses/admin.py <<'PY'
 from django.contrib import admin
 from .models import Course, Enrollment, CourseGrant
-admin.site.register(Course)
-admin.site.register(Enrollment)
-admin.site.register(CourseGrant)
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ("title", "owner", "price_toman", "status", "is_free_for_all", "updated_at")
+    list_filter = ("status", "is_free_for_all")
+    search_fields = ("title", "slug", "owner__username")
+    prepopulated_fields = {"slug": ("title",)}
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "is_active", "source", "created_at")
+    list_filter = ("is_active", "source", "created_at")
+    search_fields = ("user__username", "user__email", "course__title")
+    raw_id_fields = ("user", "course")
+
+@admin.register(CourseGrant)
+class CourseGrantAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "is_active", "reason")
+    list_filter = ("is_active",)
+    search_fields = ("user__username", "user__email", "course__title", "reason")
+    raw_id_fields = ("user", "course")
 PY
   cat > app/courses/views.py <<'PY'
 from django.views.generic import ListView, DetailView
@@ -1870,22 +2192,61 @@ HTML
 {% extends "base.html" %}
 {% block title %}پروفایل{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">ویرایش پروفایل</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div><label class="text-sm font-medium">شماره تماس</label>
-        <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
+<div class="mx-auto max-w-2xl space-y-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
+
+    {% if not allow_edit %}
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+        <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
+        <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
       </div>
-      <div><label class="text-sm font-medium">بیو</label>
-        <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
+    {% else %}
+      <form method="post" class="space-y-4">{% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="text-sm font-medium">شماره تماس</label>
+            <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
+          </div>
+          <div><label class="text-sm font-medium">بیو</label>
+            <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
+          </div>
+        </div>
+        <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <!-- Security Questions Info -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h2 class="text-lg font-bold mb-4">سوالات امنیتی</h2>
+    {% if profile.q1 or profile.q2 %}
+      <div class="space-y-3 text-sm">
+        {% if profile.q1 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۱</div>
+            <div class="font-medium">{{ profile.q1.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
+        {% if profile.q2 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۲</div>
+            <div class="font-medium">{{ profile.q2.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
       </div>
+    {% else %}
+      <div class="text-slate-500 dark:text-slate-400 text-sm">
+        سوالات امنیتی تنظیم نشده است. برای امنیت بیشتر، سوالات امنیتی خود را تنظیم کنید.
+      </div>
+    {% endif %}
+    <div class="mt-4">
+      <a class="inline-block rounded-xl border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/security/">مدیریت سوالات امنیتی</a>
     </div>
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
-  </form>
-  <div class="mt-4 text-sm"><a class="underline" href="/accounts/security/">مدیریت سوالات امنیتی</a></div>
+  </div>
 </div>
 {% endblock %}
 HTML
@@ -1895,11 +2256,19 @@ HTML
 {% block content %}
 <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
   <h1 class="text-xl font-extrabold mb-4">سوالات امنیتی</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
-  </form>
+
+  {% if not allow_edit %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+      <p class="font-semibold">تغییر سوالات امنیتی غیرفعال است</p>
+      <p class="text-sm mt-1">تغییر سوالات امنیتی توسط مدیر سایت غیرفعال شده است.</p>
+    </div>
+  {% else %}
+    <form method="post" class="space-y-4">{% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+      <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+    </form>
+  {% endif %}
 </div>
 {% endblock %}
 HTML
@@ -2232,46 +2601,196 @@ HTML
   cat > app/entrypoint.sh <<'SH'
 #!/bin/bash
 set -e
-sleep 2
 
-python manage.py makemigrations accounts settingsapp courses payments tickets dashboard
+echo "=== EduCMS Entrypoint ==="
+
+# Wait for database to be ready
+echo "Waiting for database..."
+max_attempts=30
+attempt=1
+while [ $attempt -le $max_attempts ]; do
+    python -c "
+import os, sys
+import MySQLdb
+try:
+    MySQLdb.connect(
+        host=os.getenv('DB_HOST', 'db'),
+        user=os.getenv('DB_USER'),
+        passwd=os.getenv('DB_PASSWORD'),
+        db=os.getenv('DB_NAME'),
+        port=int(os.getenv('DB_PORT', 3306))
+    )
+    print('Database is ready!')
+    sys.exit(0)
+except Exception as e:
+    print(f'Database not ready: {e}')
+    sys.exit(1)
+" && break
+    echo "Attempt $attempt/$max_attempts - Database not ready, waiting..."
+    sleep 2
+    attempt=$((attempt + 1))
+done
+
+if [ $attempt -gt $max_attempts ]; then
+    echo "ERROR: Database not ready after $max_attempts attempts"
+    exit 1
+fi
+
+echo "Running migrations..."
+python manage.py makemigrations accounts settingsapp courses payments tickets dashboard --noinput || true
 python manage.py migrate --noinput
 
+echo "Fixing database schema (adding missing columns)..."
+python manage.py shell <<'PYFIX'
+import os
+import MySQLdb
+
+db_config = {
+    'host': os.getenv('DB_HOST', 'db'),
+    'user': os.getenv('DB_USER'),
+    'passwd': os.getenv('DB_PASSWORD'),
+    'db': os.getenv('DB_NAME'),
+    'port': int(os.getenv('DB_PORT', 3306))
+}
+
+def column_exists(cursor, table, column):
+    cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+    return cursor.fetchone() is not None
+
+def table_exists(cursor, table):
+    cursor.execute(f"SHOW TABLES LIKE '{table}'")
+    return cursor.fetchone() is not None
+
+try:
+    conn = MySQLdb.connect(**db_config)
+    cursor = conn.cursor()
+
+    # Add extra_data to accounts_userprofile
+    if table_exists(cursor, 'accounts_userprofile'):
+        if not column_exists(cursor, 'accounts_userprofile', 'extra_data'):
+            cursor.execute("ALTER TABLE accounts_userprofile ADD COLUMN extra_data JSON DEFAULT NULL")
+            print("Added extra_data column to accounts_userprofile")
+
+    # Add allow_profile_edit to settingsapp_sitesetting
+    if table_exists(cursor, 'settingsapp_sitesetting'):
+        if not column_exists(cursor, 'settingsapp_sitesetting', 'allow_profile_edit'):
+            cursor.execute("ALTER TABLE settingsapp_sitesetting ADD COLUMN allow_profile_edit TINYINT(1) DEFAULT 1")
+            print("Added allow_profile_edit column to settingsapp_sitesetting")
+        if not column_exists(cursor, 'settingsapp_sitesetting', 'allow_security_edit'):
+            cursor.execute("ALTER TABLE settingsapp_sitesetting ADD COLUMN allow_security_edit TINYINT(1) DEFAULT 1")
+            print("Added allow_security_edit column to settingsapp_sitesetting")
+
+    # Create settingsapp_registrationfield table if not exists
+    if not table_exists(cursor, 'settingsapp_registrationfield'):
+        cursor.execute("""
+            CREATE TABLE settingsapp_registrationfield (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                field_key VARCHAR(50) UNIQUE NOT NULL,
+                label VARCHAR(150) NOT NULL,
+                field_type VARCHAR(20) NOT NULL DEFAULT 'text',
+                placeholder VARCHAR(200) DEFAULT '',
+                help_text VARCHAR(300) DEFAULT '',
+                choices TEXT,
+                is_required TINYINT(1) DEFAULT 0,
+                is_active TINYINT(1) DEFAULT 1,
+                is_system TINYINT(1) DEFAULT 0,
+                show_in_profile TINYINT(1) DEFAULT 1,
+                `order` INT UNSIGNED DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        """)
+        print("Created settingsapp_registrationfield table")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Database schema fix completed.")
+except Exception as e:
+    print(f"Database schema fix error (may be ok): {e}")
+PYFIX
+
+echo "Seeding database..."
 python manage.py shell <<'PY'
 import os
-from django.contrib.auth import get_user_model
-from settingsapp.models import SiteSetting, TemplateText
-from payments.models import BankTransferSetting
-from accounts.models import SecurityQuestion, UserProfile
+import traceback
 
-User=get_user_model()
-admin_u=os.getenv("ADMIN_USERNAME")
-admin_p=os.getenv("ADMIN_PASSWORD")
-admin_e=os.getenv("ADMIN_EMAIL")
-initial_admin_path=os.getenv("INITIAL_ADMIN_PATH","admin") or "admin"
+try:
+    from django.contrib.auth import get_user_model
+    from settingsapp.models import SiteSetting, TemplateText
+    from payments.models import BankTransferSetting
+    from accounts.models import SecurityQuestion, UserProfile
 
-u,_=User.objects.get_or_create(username=admin_u, defaults={"email": admin_e})
-u.is_staff=True; u.is_superuser=True; u.email=admin_e
-u.set_password(admin_p); u.save()
-UserProfile.objects.get_or_create(user=u)
+    User=get_user_model()
+    admin_u=os.getenv("ADMIN_USERNAME")
+    admin_p=os.getenv("ADMIN_PASSWORD")
+    admin_e=os.getenv("ADMIN_EMAIL")
+    initial_admin_path=os.getenv("INITIAL_ADMIN_PATH","admin") or "admin"
 
-qs=[("نام اولین معلم شما چه بود؟",1),("نام شهر محل تولد شما چیست؟",2),("نام بهترین دوست دوران کودکی شما چیست؟",3),("مدل اولین گوشی شما چه بود؟",4)]
-for t,o in qs:
-  SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
+    u,_=User.objects.get_or_create(username=admin_u, defaults={"email": admin_e})
+    u.is_staff=True; u.is_superuser=True; u.email=admin_e
+    u.set_password(admin_p); u.save()
+    UserProfile.objects.get_or_create(user=u)
+    print("Admin user created/updated.")
 
-s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path})
-if not s.admin_path:
-  s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
+    qs=[
+        ("نام اولین معلم شما چه بود؟", 1),
+        ("نام شهر محل تولد شما چیست؟", 2),
+        ("نام بهترین دوست دوران کودکی شما چیست؟", 3),
+        ("مدل اولین گوشی شما چه بود؟", 4),
+        ("نام اولین حیوان خانگی شما چه بود؟", 5),
+        ("نام مادربزرگ مادری شما چیست؟", 6),
+        ("نام اولین مدرسه شما چه بود؟", 7),
+        ("رنگ مورد علاقه شما در کودکی چه بود؟", 8),
+        ("نام اولین خیابانی که در آن زندگی کردید چیست؟", 9),
+        ("غذای مورد علاقه دوران کودکی شما چه بود؟", 10),
+        ("نام بهترین دوست دوران دبیرستان شما چیست؟", 11),
+        ("شغل رویایی دوران کودکی شما چه بود؟", 12),
+        ("نام اولین فیلمی که در سینما دیدید چه بود؟", 13),
+        ("نام اولین کتابی که خواندید چه بود؟", 14),
+        ("تاریخ تولد پدر شما چیست؟", 15),
+    ]
+    for t,o in qs:
+        SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
+    print("Security questions seeded.")
 
-BankTransferSetting.objects.get_or_create(id=1)
-TemplateText.objects.get_or_create(key="home_title", defaults={"title":"عنوان","value":"دوره‌های آموزشی"})
-TemplateText.objects.get_or_create(key="home_subtitle", defaults={"title":"زیرعنوان","value":"جدیدترین دوره‌ها"})
-TemplateText.objects.get_or_create(key="home_empty", defaults={"title":"بدون دوره","value":"هنوز دوره‌ای منتشر نشده است."})
-print("Seed done.")
+    # Seed default registration fields (system fields that cannot be deleted)
+    try:
+        from settingsapp.models import RegistrationField
+        default_fields = [
+            {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
+            {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
+            {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
+            {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
+            {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
+        ]
+        for f in default_fields:
+            RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
+        print("Registration fields seeded.")
+    except Exception as e:
+        print(f"Registration fields seed skipped: {e}")
+
+    s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path})
+    if not s.admin_path:
+        s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
+    print("Site settings seeded.")
+
+    BankTransferSetting.objects.get_or_create(id=1)
+    TemplateText.objects.get_or_create(key="home_title", defaults={"title":"عنوان","value":"دوره‌های آموزشی"})
+    TemplateText.objects.get_or_create(key="home_subtitle", defaults={"title":"زیرعنوان","value":"جدیدترین دوره‌ها"})
+    TemplateText.objects.get_or_create(key="home_empty", defaults={"title":"بدون دوره","value":"هنوز دوره‌ای منتشر نشده است."})
+    print("Template texts seeded.")
+    print("=== Seed completed successfully ===")
+except Exception as e:
+    print(f"ERROR during seeding: {e}")
+    traceback.print_exc()
 PY
 
+echo "Collecting static files..."
 python manage.py collectstatic --noinput
-exec gunicorn educms.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+
+echo "Starting Gunicorn..."
+exec gunicorn educms.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -
 SH
   chmod +x app/entrypoint.sh
 }
