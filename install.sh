@@ -538,8 +538,11 @@ _INPUT = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-n
 
 def get_registration_fields():
     """Get active registration fields from database"""
-    from settingsapp.models import RegistrationField
-    return RegistrationField.objects.filter(is_active=True).order_by("order", "id")
+    try:
+        from settingsapp.models import RegistrationField
+        return list(RegistrationField.objects.filter(is_active=True).order_by("order", "id"))
+    except Exception:
+        return []
 
 def build_form_field(reg_field):
     """Build a Django form field from a RegistrationField model instance"""
@@ -1050,7 +1053,7 @@ class SiteSettingAdmin(admin.ModelAdmin):
 class RegistrationFieldAdmin(admin.ModelAdmin):
     list_display = ("label", "field_key", "field_type", "is_required", "is_active", "is_system", "show_in_profile", "order")
     list_filter = ("field_type", "is_required", "is_active", "is_system", "show_in_profile")
-    list_editable = ("order", "is_required", "is_active", "show_in_profile")
+    list_editable = ("order", "is_required", "show_in_profile")
     search_fields = ("field_key", "label")
     ordering = ("order", "id")
     fieldsets = (
@@ -1070,15 +1073,9 @@ class RegistrationFieldAdmin(admin.ModelAdmin):
         return super().has_delete_permission(request, obj)
 
     def save_model(self, request, obj, form, change):
-        if change and obj.is_system:
-            original = RegistrationField.objects.get(pk=obj.pk)
-            if not original.is_active and not obj.is_active:
-                pass
-            elif original.is_system:
-                obj.is_active = True
+        if obj.is_system:
+            obj.is_active = True
         super().save_model(request, obj, form, change)
-        if obj.is_system and not obj.is_active:
-            messages.warning(request, _("فیلدهای سیستمی نمی‌توانند غیرفعال شوند."))
 
 admin.site.register(TemplateText)
 admin.site.register(NavLink)
@@ -1086,10 +1083,16 @@ PY
   cat > app/settingsapp/context_processors.py <<'PY'
 from .models import SiteSetting, TemplateText, NavLink
 def site_context(request):
-  s = SiteSetting.objects.first()
-  texts = {t.key: t.value for t in TemplateText.objects.all()}
-  header_links = list(NavLink.objects.filter(area="header", is_active=True).order_by("order"))
-  footer_links = list(NavLink.objects.filter(area="footer", is_active=True).order_by("order"))
+  try:
+    s = SiteSetting.objects.first()
+    texts = {t.key: t.value for t in TemplateText.objects.all()}
+    header_links = list(NavLink.objects.filter(area="header", is_active=True).order_by("order"))
+    footer_links = list(NavLink.objects.filter(area="footer", is_active=True).order_by("order"))
+  except Exception:
+    s = None
+    texts = {}
+    header_links = []
+    footer_links = []
   return {"site_settings": s, "tpl": texts, "header_links": header_links, "footer_links": footer_links}
 PY
   cat > app/settingsapp/forms.py <<'PY'
@@ -2468,57 +2471,106 @@ HTML
   cat > app/entrypoint.sh <<'SH'
 #!/bin/bash
 set -e
-sleep 2
 
-python manage.py makemigrations accounts settingsapp courses payments tickets dashboard
+echo "=== EduCMS Entrypoint ==="
+
+# Wait for database to be ready
+echo "Waiting for database..."
+max_attempts=30
+attempt=1
+while [ $attempt -le $max_attempts ]; do
+    python -c "
+import os, sys
+import MySQLdb
+try:
+    MySQLdb.connect(
+        host=os.getenv('DB_HOST', 'db'),
+        user=os.getenv('DB_USER'),
+        passwd=os.getenv('DB_PASSWORD'),
+        db=os.getenv('DB_NAME'),
+        port=int(os.getenv('DB_PORT', 3306))
+    )
+    print('Database is ready!')
+    sys.exit(0)
+except Exception as e:
+    print(f'Database not ready: {e}')
+    sys.exit(1)
+" && break
+    echo "Attempt $attempt/$max_attempts - Database not ready, waiting..."
+    sleep 2
+    attempt=$((attempt + 1))
+done
+
+if [ $attempt -gt $max_attempts ]; then
+    echo "ERROR: Database not ready after $max_attempts attempts"
+    exit 1
+fi
+
+echo "Running migrations..."
+python manage.py makemigrations accounts settingsapp courses payments tickets dashboard --noinput || true
 python manage.py migrate --noinput
 
+echo "Seeding database..."
 python manage.py shell <<'PY'
 import os
-from django.contrib.auth import get_user_model
-from settingsapp.models import SiteSetting, TemplateText, RegistrationField
-from payments.models import BankTransferSetting
-from accounts.models import SecurityQuestion, UserProfile
+import traceback
 
-User=get_user_model()
-admin_u=os.getenv("ADMIN_USERNAME")
-admin_p=os.getenv("ADMIN_PASSWORD")
-admin_e=os.getenv("ADMIN_EMAIL")
-initial_admin_path=os.getenv("INITIAL_ADMIN_PATH","admin") or "admin"
+try:
+    from django.contrib.auth import get_user_model
+    from settingsapp.models import SiteSetting, TemplateText, RegistrationField
+    from payments.models import BankTransferSetting
+    from accounts.models import SecurityQuestion, UserProfile
 
-u,_=User.objects.get_or_create(username=admin_u, defaults={"email": admin_e})
-u.is_staff=True; u.is_superuser=True; u.email=admin_e
-u.set_password(admin_p); u.save()
-UserProfile.objects.get_or_create(user=u)
+    User=get_user_model()
+    admin_u=os.getenv("ADMIN_USERNAME")
+    admin_p=os.getenv("ADMIN_PASSWORD")
+    admin_e=os.getenv("ADMIN_EMAIL")
+    initial_admin_path=os.getenv("INITIAL_ADMIN_PATH","admin") or "admin"
 
-qs=[("نام اولین معلم شما چه بود؟",1),("نام شهر محل تولد شما چیست؟",2),("نام بهترین دوست دوران کودکی شما چیست؟",3),("مدل اولین گوشی شما چه بود؟",4)]
-for t,o in qs:
-  SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
+    u,_=User.objects.get_or_create(username=admin_u, defaults={"email": admin_e})
+    u.is_staff=True; u.is_superuser=True; u.email=admin_e
+    u.set_password(admin_p); u.save()
+    UserProfile.objects.get_or_create(user=u)
+    print("Admin user created/updated.")
 
-# Seed default registration fields (system fields that cannot be deleted)
-default_fields = [
-    {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
-    {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
-    {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
-    {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
-    {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
-]
-for f in default_fields:
-    RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
+    qs=[("نام اولین معلم شما چه بود؟",1),("نام شهر محل تولد شما چیست؟",2),("نام بهترین دوست دوران کودکی شما چیست؟",3),("مدل اولین گوشی شما چه بود؟",4)]
+    for t,o in qs:
+        SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
+    print("Security questions seeded.")
 
-s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path,"allow_profile_edit":True})
-if not s.admin_path:
-  s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
+    # Seed default registration fields (system fields that cannot be deleted)
+    default_fields = [
+        {"field_key": "email", "label": "ایمیل", "field_type": "email", "is_required": True, "is_system": True, "order": 1, "show_in_profile": True},
+        {"field_key": "security_question", "label": "سوال امنیتی", "field_type": "select", "is_required": True, "is_system": True, "order": 2, "show_in_profile": False},
+        {"field_key": "security_answer", "label": "پاسخ سوال امنیتی", "field_type": "password", "is_required": True, "is_system": True, "order": 3, "show_in_profile": False},
+        {"field_key": "password1", "label": "گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 4, "show_in_profile": False},
+        {"field_key": "password2", "label": "تکرار گذرواژه", "field_type": "password", "is_required": True, "is_system": True, "order": 5, "show_in_profile": False},
+    ]
+    for f in default_fields:
+        RegistrationField.objects.get_or_create(field_key=f["field_key"], defaults=f)
+    print("Registration fields seeded.")
 
-BankTransferSetting.objects.get_or_create(id=1)
-TemplateText.objects.get_or_create(key="home_title", defaults={"title":"عنوان","value":"دوره‌های آموزشی"})
-TemplateText.objects.get_or_create(key="home_subtitle", defaults={"title":"زیرعنوان","value":"جدیدترین دوره‌ها"})
-TemplateText.objects.get_or_create(key="home_empty", defaults={"title":"بدون دوره","value":"هنوز دوره‌ای منتشر نشده است."})
-print("Seed done.")
+    s,_=SiteSetting.objects.get_or_create(id=1, defaults={"brand_name":"EduCMS","footer_text":"© تمامی حقوق محفوظ است.","default_theme":"system","admin_path":initial_admin_path,"allow_profile_edit":True})
+    if not s.admin_path:
+        s.admin_path=initial_admin_path; s.save(update_fields=["admin_path"])
+    print("Site settings seeded.")
+
+    BankTransferSetting.objects.get_or_create(id=1)
+    TemplateText.objects.get_or_create(key="home_title", defaults={"title":"عنوان","value":"دوره‌های آموزشی"})
+    TemplateText.objects.get_or_create(key="home_subtitle", defaults={"title":"زیرعنوان","value":"جدیدترین دوره‌ها"})
+    TemplateText.objects.get_or_create(key="home_empty", defaults={"title":"بدون دوره","value":"هنوز دوره‌ای منتشر نشده است."})
+    print("Template texts seeded.")
+    print("=== Seed completed successfully ===")
+except Exception as e:
+    print(f"ERROR during seeding: {e}")
+    traceback.print_exc()
 PY
 
+echo "Collecting static files..."
 python manage.py collectstatic --noinput
-exec gunicorn educms.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+
+echo "Starting Gunicorn..."
+exec gunicorn educms.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -
 SH
   chmod +x app/entrypoint.sh
 }
