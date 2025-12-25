@@ -1057,68 +1057,32 @@ class NavLink(models.Model):
 PY
   cat > app/settingsapp/admin.py <<'PY'
 from django.contrib import admin
-from django.contrib import messages
-from django.utils.translation import gettext_lazy as _
-from .models import SiteSetting, TemplateText, NavLink, RegistrationField
 
 admin.site.site_header="پنل مدیریت"
 admin.site.site_title="پنل مدیریت"
 admin.site.index_title="مدیریت سایت"
 
+from .models import SiteSetting, TemplateText, NavLink
+
+# Very simple admin for SiteSetting
 @admin.register(SiteSetting)
 class SiteSettingAdmin(admin.ModelAdmin):
-    list_display = ("brand_name", "default_theme", "admin_path", "updated_at")
-
-    def get_list_display(self, request):
-        list_display = ["brand_name", "default_theme", "admin_path", "updated_at"]
-        # Check if allow_profile_edit field exists
-        if hasattr(SiteSetting, 'allow_profile_edit'):
-            list_display.insert(2, "allow_profile_edit")
-        return list_display
-
-    def get_fieldsets(self, request, obj=None):
-        fieldsets = [
-            (_("برند"), {"fields": ("brand_name", "logo", "favicon")}),
-            (_("ظاهر"), {"fields": ("default_theme", "footer_text")}),
-            (_("امنیت"), {"fields": ("admin_path",)}),
-        ]
-        # Check if allow_profile_edit field exists
-        if hasattr(SiteSetting, 'allow_profile_edit'):
-            fieldsets.insert(2, (_("تنظیمات کاربران"), {"fields": ("allow_profile_edit",)}))
-        return fieldsets
-
-@admin.register(RegistrationField)
-class RegistrationFieldAdmin(admin.ModelAdmin):
-    list_display = ("label", "field_key", "field_type", "is_required", "is_active", "is_system", "show_in_profile", "order")
-    list_filter = ("field_type", "is_required", "is_active", "is_system", "show_in_profile")
-    list_editable = ("order", "is_required", "show_in_profile")
-    search_fields = ("field_key", "label")
-    ordering = ("order", "id")
-
-    def get_fieldsets(self, request, obj=None):
-        return [
-            (None, {"fields": ("field_key", "label", "field_type")}),
-            (_("تنظیمات فیلد"), {"fields": ("placeholder", "help_text", "choices")}),
-            (_("وضعیت"), {"fields": ("is_required", "is_active", "is_system", "show_in_profile", "order")}),
-        ]
-
-    def get_readonly_fields(self, request, obj=None):
-        if obj and getattr(obj, 'is_system', False):
-            return ("field_key", "is_system", "is_active")
-        return ("is_system",)
-
-    def has_delete_permission(self, request, obj=None):
-        if obj and getattr(obj, 'is_system', False):
-            return False
-        return super().has_delete_permission(request, obj)
-
-    def save_model(self, request, obj, form, change):
-        if getattr(obj, 'is_system', False):
-            obj.is_active = True
-        super().save_model(request, obj, form, change)
+    pass
 
 admin.site.register(TemplateText)
 admin.site.register(NavLink)
+
+# Register RegistrationField only if table exists
+try:
+    from .models import RegistrationField
+    
+    @admin.register(RegistrationField)
+    class RegistrationFieldAdmin(admin.ModelAdmin):
+        list_display = ("label", "field_key", "field_type", "order")
+        search_fields = ("field_key", "label")
+        ordering = ("order",)
+except Exception:
+    pass
 PY
   cat > app/settingsapp/context_processors.py <<'PY'
 from .models import SiteSetting, TemplateText, NavLink
