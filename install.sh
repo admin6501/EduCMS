@@ -597,7 +597,7 @@ class RegisterForm(UserCreationForm):
     )
 
     security_question = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order","text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         empty_label=_("انتخاب کنید"),
         label=_("سوال امنیتی"),
@@ -625,6 +625,12 @@ class RegisterForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._dynamic_fields = []
+
+        # Set the queryset dynamically to avoid issues when table doesn't exist
+        try:
+            self.fields['security_question'].queryset = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
+        except Exception:
+            pass
 
         # Add dynamic fields from RegistrationField model
         try:
@@ -677,10 +683,13 @@ class RegisterForm(UserCreationForm):
             ans = (self.cleaned_data.get("security_answer") or "").strip().lower()
             prof.a1_hash = make_password(ans)
 
-            # Save custom fields to profile extra_data
-            custom_data = self.get_custom_field_data()
-            if custom_data:
-                prof.extra_data = custom_data
+            # Save custom fields to profile extra_data (safely)
+            try:
+                custom_data = self.get_custom_field_data()
+                if custom_data and hasattr(prof, 'extra_data'):
+                    prof.extra_data = custom_data
+            except Exception:
+                pass
             prof.save()
         return user
 
@@ -711,10 +720,11 @@ class ProfileForm(forms.ModelForm):
                 self.fields[field_name] = field
                 self._dynamic_fields.append(reg_field.field_key)
 
-                # Set initial value from profile extra_data
-                if profile and profile.extra_data:
-                    if reg_field.field_key in profile.extra_data:
-                        self.initial[field_name] = profile.extra_data[reg_field.field_key]
+                # Set initial value from profile extra_data (safely)
+                if profile:
+                    extra_data = getattr(profile, 'extra_data', None) or {}
+                    if reg_field.field_key in extra_data:
+                        self.initial[field_name] = extra_data[reg_field.field_key]
         except Exception:
             pass
 
@@ -729,7 +739,7 @@ class ProfileForm(forms.ModelForm):
 
 class SecurityQuestionsForm(forms.Form):
     q1 = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         label=_("سوال امنیتی ۱"),
         widget=forms.Select(attrs={"class": _INPUT})
@@ -740,7 +750,7 @@ class SecurityQuestionsForm(forms.Form):
         widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
     )
     q2 = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order", "text"),
+        queryset=SecurityQuestion.objects.none(),
         required=True,
         label=_("سوال امنیتی ۲"),
         widget=forms.Select(attrs={"class": _INPUT})
@@ -754,6 +764,13 @@ class SecurityQuestionsForm(forms.Form):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+        # Set querysets dynamically
+        try:
+            qs = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
+            self.fields['q1'].queryset = qs
+            self.fields['q2'].queryset = qs
+        except Exception:
+            pass
 
     def clean(self):
         c = super().clean()
@@ -847,9 +864,15 @@ class RegisterView(CreateView):
 
 @login_required
 def profile_edit(request):
-  from settingsapp.models import SiteSetting
-  site_setting = SiteSetting.objects.first()
-  allow_edit = site_setting.allow_profile_edit if site_setting else True
+  # Check if profile editing is allowed
+  allow_edit = True
+  try:
+    from settingsapp.models import SiteSetting
+    site_setting = SiteSetting.objects.first()
+    if site_setting:
+      allow_edit = getattr(site_setting, 'allow_profile_edit', True)
+  except Exception:
+    pass
 
   if not allow_edit:
     messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
@@ -863,14 +886,17 @@ def profile_edit(request):
     profile.phone = (request.POST.get("phone") or "").strip()
     profile.bio = (request.POST.get("bio") or "").strip()
 
-    # Save custom field data
-    custom_data = form.get_custom_field_data()
-    if custom_data:
-      if not profile.extra_data:
-        profile.extra_data = {}
-      profile.extra_data.update(custom_data)
+    # Save custom field data safely
+    try:
+      custom_data = form.get_custom_field_data()
+      if custom_data:
+        extra = getattr(profile, 'extra_data', None) or {}
+        extra.update(custom_data)
+        profile.extra_data = extra
+      profile.save()
+    except Exception:
+      profile.save(update_fields=["phone", "bio"])
 
-    profile.save(update_fields=["phone", "bio", "extra_data", "updated_at"])
     messages.success(request, "پروفایل بروزرسانی شد.")
     return redirect("profile_edit")
 
@@ -1168,12 +1194,15 @@ from .models import SiteSetting
 
 def _get_admin_path():
   key="site_admin_path"
-  v=cache.get(key)
-  if v: return v
-  s=SiteSetting.objects.first()
-  v=(getattr(s,"admin_path",None) or "admin").strip().strip("/") or "admin"
-  cache.set(key,v,60)
-  return v
+  try:
+    v=cache.get(key)
+    if v: return v
+    s=SiteSetting.objects.first()
+    v=(getattr(s,"admin_path",None) or "admin").strip().strip("/") or "admin"
+    cache.set(key,v,60)
+    return v
+  except Exception:
+    return "admin"
 
 class AdminAliasMiddleware(MiddlewareMixin):
   def process_request(self, request):
