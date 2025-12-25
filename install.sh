@@ -1067,13 +1067,25 @@ admin.site.index_title="مدیریت سایت"
 
 @admin.register(SiteSetting)
 class SiteSettingAdmin(admin.ModelAdmin):
-    list_display = ("brand_name", "default_theme", "allow_profile_edit", "admin_path", "updated_at")
-    fieldsets = (
-        (_("برند"), {"fields": ("brand_name", "logo", "favicon")}),
-        (_("ظاهر"), {"fields": ("default_theme", "footer_text")}),
-        (_("تنظیمات کاربران"), {"fields": ("allow_profile_edit",)}),
-        (_("امنیت"), {"fields": ("admin_path",)}),
-    )
+    list_display = ("brand_name", "default_theme", "admin_path", "updated_at")
+
+    def get_list_display(self, request):
+        list_display = ["brand_name", "default_theme", "admin_path", "updated_at"]
+        # Check if allow_profile_edit field exists
+        if hasattr(SiteSetting, 'allow_profile_edit'):
+            list_display.insert(2, "allow_profile_edit")
+        return list_display
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = [
+            (_("برند"), {"fields": ("brand_name", "logo", "favicon")}),
+            (_("ظاهر"), {"fields": ("default_theme", "footer_text")}),
+            (_("امنیت"), {"fields": ("admin_path",)}),
+        ]
+        # Check if allow_profile_edit field exists
+        if hasattr(SiteSetting, 'allow_profile_edit'):
+            fieldsets.insert(2, (_("تنظیمات کاربران"), {"fields": ("allow_profile_edit",)}))
+        return fieldsets
 
 @admin.register(RegistrationField)
 class RegistrationFieldAdmin(admin.ModelAdmin):
@@ -1082,24 +1094,26 @@ class RegistrationFieldAdmin(admin.ModelAdmin):
     list_editable = ("order", "is_required", "show_in_profile")
     search_fields = ("field_key", "label")
     ordering = ("order", "id")
-    fieldsets = (
-        (None, {"fields": ("field_key", "label", "field_type")}),
-        (_("تنظیمات فیلد"), {"fields": ("placeholder", "help_text", "choices")}),
-        (_("وضعیت"), {"fields": ("is_required", "is_active", "is_system", "show_in_profile", "order")}),
-    )
+
+    def get_fieldsets(self, request, obj=None):
+        return [
+            (None, {"fields": ("field_key", "label", "field_type")}),
+            (_("تنظیمات فیلد"), {"fields": ("placeholder", "help_text", "choices")}),
+            (_("وضعیت"), {"fields": ("is_required", "is_active", "is_system", "show_in_profile", "order")}),
+        ]
 
     def get_readonly_fields(self, request, obj=None):
-        if obj and obj.is_system:
+        if obj and getattr(obj, 'is_system', False):
             return ("field_key", "is_system", "is_active")
         return ("is_system",)
 
     def has_delete_permission(self, request, obj=None):
-        if obj and obj.is_system:
+        if obj and getattr(obj, 'is_system', False):
             return False
         return super().has_delete_permission(request, obj)
 
     def save_model(self, request, obj, form, change):
-        if obj.is_system:
+        if getattr(obj, 'is_system', False):
             obj.is_active = True
         super().save_model(request, obj, form, change)
 
@@ -1259,22 +1273,26 @@ class Course(models.Model):
 
 class Enrollment(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-  course=models.ForeignKey(Course, on_delete=models.CASCADE)
-  is_active=models.BooleanField(default=True)
-  source=models.CharField(max_length=30, default="paid")
-  created_at=models.DateTimeField(auto_now_add=True)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name=_("کاربر"))
+  course=models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name=_("دوره"))
+  is_active=models.BooleanField(default=True, verbose_name=_("فعال"))
+  source=models.CharField(max_length=30, default="paid", verbose_name=_("منبع"))
+  created_at=models.DateTimeField(auto_now_add=True, verbose_name=_("تاریخ ثبت"))
   class Meta:
     unique_together=[("user","course")]
+    verbose_name=_("ثبت‌نام دوره")
+    verbose_name_plural=_("ثبت‌نام‌های دوره")
 
 class CourseGrant(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-  course=models.ForeignKey(Course, on_delete=models.CASCADE)
-  is_active=models.BooleanField(default=True)
-  reason=models.CharField(max_length=200, blank=True)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name=_("کاربر"))
+  course=models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name=_("دوره"))
+  is_active=models.BooleanField(default=True, verbose_name=_("فعال"))
+  reason=models.CharField(max_length=200, blank=True, verbose_name=_("دلیل"))
   class Meta:
     unique_together=[("user","course")]
+    verbose_name=_("دسترسی اهدایی")
+    verbose_name_plural=_("دسترسی‌های اهدایی")
 PY
   cat > app/courses/access.py <<'PY'
 from .models import Enrollment, CourseGrant
@@ -1288,9 +1306,27 @@ PY
   cat > app/courses/admin.py <<'PY'
 from django.contrib import admin
 from .models import Course, Enrollment, CourseGrant
-admin.site.register(Course)
-admin.site.register(Enrollment)
-admin.site.register(CourseGrant)
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ("title", "owner", "price_toman", "status", "is_free_for_all", "updated_at")
+    list_filter = ("status", "is_free_for_all")
+    search_fields = ("title", "slug", "owner__username")
+    prepopulated_fields = {"slug": ("title",)}
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "is_active", "source", "created_at")
+    list_filter = ("is_active", "source", "created_at")
+    search_fields = ("user__username", "user__email", "course__title")
+    raw_id_fields = ("user", "course")
+
+@admin.register(CourseGrant)
+class CourseGrantAdmin(admin.ModelAdmin):
+    list_display = ("user", "course", "is_active", "reason")
+    list_filter = ("is_active",)
+    search_fields = ("user__username", "user__email", "course__title", "reason")
+    raw_id_fields = ("user", "course")
 PY
   cat > app/courses/views.py <<'PY'
 from django.views.generic import ListView, DetailView
