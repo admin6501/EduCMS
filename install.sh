@@ -335,9 +335,11 @@ DATABASES = {"default":{
 
 AUTH_USER_MODEL = "accounts.User"
 
+AUTHENTICATION_BACKENDS = ["accounts.backends.EmailOrUsernameBackend"]
+
 LANGUAGE_CODE = "fa"
 USE_I18N = True
-LANGUAGES = [("fa","فارسی"),("en","English")]
+LANGUAGES = [("fa","فارسی")]
 TIME_ZONE = "Asia/Tehran"
 USE_TZ = True
 
@@ -403,14 +405,34 @@ PY
 import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.utils.text import slugify
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password, check_password
 
 class User(AbstractUser):
-  id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  class Meta:
-    verbose_name=_("کاربر"); verbose_name_plural=_("کاربران")
+  id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, verbose_name=_("شناسه"))
+  email = models.EmailField(_("ایمیل"), unique=True)
+  username = models.CharField(_("نام کاربری"), max_length=150, unique=True, blank=True)
 
+  def save(self, *args, **kwargs):
+    # If user was created via email-only registration, auto-generate a unique username
+    if not (self.username or "").strip():
+      local = (self.email or "user").split("@")[0].strip() or "user"
+      base = slugify(local, allow_unicode=False) or "user"
+      candidate = base
+      i = 0
+      while User.objects.filter(username__iexact=candidate).exclude(pk=self.pk).exists():
+        i += 1
+        candidate = f"{base}{i}"
+        if i > 9999:
+          candidate = f"{base}{uuid.uuid4().hex[:6]}"
+          break
+      self.username = candidate
+    return super().save(*args, **kwargs)
+
+  class Meta:
+    verbose_name = _("کاربر")
+    verbose_name_plural = _("کاربران")
 class SecurityQuestion(models.Model):
   id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
   text = models.CharField(max_length=250, unique=True, verbose_name=_("متن سوال"))
@@ -447,96 +469,166 @@ PY
   cat > app/accounts/admin.py <<'PY'
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils.translation import gettext_lazy as _
 from .models import User, SecurityQuestion, UserProfile
-
-@admin.register(User)
-class UserAdmin(BaseUserAdmin):
-  list_display=("username","email","is_staff","is_superuser","is_active")
-  search_fields=("username","email")
 
 @admin.register(SecurityQuestion)
 class SecurityQuestionAdmin(admin.ModelAdmin):
-  list_display=("text","is_active","order")
-  list_filter=("is_active",)
-  search_fields=("text",)
+  list_display = ("id","title","is_active")
+  list_filter = ("is_active",)
+  search_fields = ("title",)
+
+class UserProfileInline(admin.StackedInline):
+  model = UserProfile
+  can_delete = False
+  extra = 0
+  verbose_name = _("پروفایل")
+  verbose_name_plural = _("پروفایل")
+  readonly_fields = ("updated_at",)
+  fieldsets = (
+    (_("اطلاعات پروفایل"), {"fields": ("phone","bio","updated_at")}),
+    (_("سوالات امنیتی"), {"fields": ("q1","q2")}),
+  )
+
+@admin.register(User)
+class UserAdmin(BaseUserAdmin):
+  ordering = ("-date_joined",)
+  list_display = ("email","username","is_staff","is_superuser","is_active","date_joined")
+  list_filter = ("is_staff","is_superuser","is_active","groups")
+  search_fields = ("email","username","first_name","last_name")
+  readonly_fields = ("last_login","date_joined")
+  inlines = [UserProfileInline]
+
+  fieldsets = (
+    (None, {"fields": ("email","username","password")}),
+    (_("اطلاعات شخصی"), {"fields": ("first_name","last_name")}),
+    (_("سطح دسترسی"), {"fields": ("is_active","is_staff","is_superuser","groups","user_permissions")}),
+    (_("تاریخ‌ها"), {"fields": ("last_login","date_joined")}),
+  )
+
+  add_fieldsets = (
+    (None, {"classes": ("wide",), "fields": ("email","username","password1","password2","is_staff","is_superuser","is_active")}),
+  )
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-  list_display=("user","phone","updated_at")
-  search_fields=("user__username","user__email","phone")
+  list_display = ("user","phone","updated_at")
+  search_fields = ("user__email","user__username","phone")
+  list_select_related = ("user",)
 PY
   cat > app/accounts/forms.py <<'PY'
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.hashers import make_password
 from django.utils.translation import gettext_lazy as _
-from django.contrib.auth.password_validation import validate_password
-from .models import SecurityQuestion
+
+from .models import UserProfile, SecurityQuestion
 
 User = get_user_model()
+
 _INPUT = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700"
 
 class LoginForm(AuthenticationForm):
-  username = forms.CharField(label=_("نام کاربری"), widget=forms.TextInput(attrs={"class":_INPUT,"autocomplete":"username"}))
-  password = forms.CharField(label=_("گذرواژه"), widget=forms.PasswordInput(attrs={"class":_INPUT,"autocomplete":"current-password"}))
+    username = forms.CharField(
+        label=_("ایمیل"),
+        widget=forms.TextInput(attrs={"class": _INPUT, "autocomplete":"email", "dir":"ltr"})
+    )
+    password = forms.CharField(
+        label=_("گذرواژه"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete":"current-password", "dir":"ltr"})
+    )
 
 class RegisterForm(UserCreationForm):
-  email = forms.EmailField(required=False, label=_("ایمیل (اختیاری)"), widget=forms.EmailInput(attrs={"class":_INPUT,"dir":"ltr"}))
-  password1 = forms.CharField(label=_("گذرواژه"), widget=forms.PasswordInput(attrs={"class":_INPUT,"autocomplete":"new-password"}))
-  password2 = forms.CharField(label=_("تکرار گذرواژه"), widget=forms.PasswordInput(attrs={"class":_INPUT,"autocomplete":"new-password"}))
-  class Meta:
-    model = User
-    fields = ("username","email","first_name","last_name")
-    widgets = {
-      "username": forms.TextInput(attrs={"class":_INPUT,"autocomplete":"username"}),
-      "first_name": forms.TextInput(attrs={"class":_INPUT}),
-      "last_name": forms.TextInput(attrs={"class":_INPUT}),
-    }
+    email = forms.EmailField(
+        label=_("ایمیل"),
+        widget=forms.EmailInput(attrs={"class": _INPUT, "autocomplete":"email", "dir":"ltr"})
+    )
 
-class ProfileForm(forms.ModelForm):
-  class Meta:
-    model = User
-    fields=("email","first_name","last_name")
-    widgets={"email": forms.EmailInput(attrs={"class":_INPUT,"dir":"ltr"}),
-             "first_name": forms.TextInput(attrs={"class":_INPUT}),
-             "last_name": forms.TextInput(attrs={"class":_INPUT})}
+    security_question = forms.ModelChoiceField(
+        queryset=SecurityQuestion.objects.filter(is_active=True).order_by("order","title"),
+        required=True,
+        empty_label=_("انتخاب کنید"),
+        label=_("سوال امنیتی"),
+        widget=forms.Select(attrs={"class": _INPUT})
+    )
+    security_answer = forms.CharField(
+        required=True,
+        label=_("پاسخ سوال امنیتی"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete":"off"})
+    )
 
-class SecurityQuestionsForm(forms.Form):
-  q1 = forms.ModelChoiceField(label=_("سوال ۱"), queryset=SecurityQuestion.objects.none(), widget=forms.Select(attrs={"class":_INPUT}))
-  a1 = forms.CharField(label=_("پاسخ ۱"), widget=forms.TextInput(attrs={"class":_INPUT}))
-  q2 = forms.ModelChoiceField(label=_("سوال ۲"), queryset=SecurityQuestion.objects.none(), widget=forms.Select(attrs={"class":_INPUT}))
-  a2 = forms.CharField(label=_("پاسخ ۲"), widget=forms.TextInput(attrs={"class":_INPUT}))
-  current_password = forms.CharField(label=_("رمز فعلی"), widget=forms.PasswordInput(attrs={"class":_INPUT}))
+    password1 = forms.CharField(
+        label=_("گذرواژه"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete":"new-password", "dir":"ltr"})
+    )
+    password2 = forms.CharField(
+        label=_("تکرار گذرواژه"),
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete":"new-password", "dir":"ltr"})
+    )
 
-  def __init__(self,*a,user=None,**k):
-    super().__init__(*a,**k); self.user=user
-    qs = SecurityQuestion.objects.filter(is_active=True).order_by("order","text")
-    self.fields["q1"].queryset = qs
-    self.fields["q2"].queryset = qs
+    class Meta:
+        model = User
+        fields = ("email",)
 
-  def clean(self):
-    c=super().clean()
-    if c.get("q1") and c.get("q2") and c["q1"].id==c["q2"].id:
-      raise forms.ValidationError(_("دو سوال باید متفاوت باشند."))
-    if self.user and not self.user.check_password(c.get("current_password") or ""):
-      raise forms.ValidationError(_("رمز فعلی صحیح نیست."))
-    return c
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class ResetStep1Form(forms.Form):
-  identifier = forms.CharField(label=_("نام کاربری یا ایمیل"), widget=forms.TextInput(attrs={"class":_INPUT,"dir":"ltr"}))
+        # Force field order (email -> security -> passwords)
+        ordered = ["email", "security_question", "security_answer", "password1", "password2"]
+        self.order_fields(ordered)
 
-class ResetStep2Form(forms.Form):
-  a1 = forms.CharField(label=_("پاسخ ۱"), widget=forms.TextInput(attrs={"class":_INPUT}))
-  a2 = forms.CharField(label=_("پاسخ ۲"), widget=forms.TextInput(attrs={"class":_INPUT}))
-  new_password1 = forms.CharField(label=_("رمز جدید"), widget=forms.PasswordInput(attrs={"class":_INPUT}))
-  new_password2 = forms.CharField(label=_("تکرار رمز جدید"), widget=forms.PasswordInput(attrs={"class":_INPUT}))
-  def clean(self):
-    c=super().clean()
-    if (c.get("new_password1") or "") != (c.get("new_password2") or ""):
-      raise forms.ValidationError(_("رمزهای جدید یکسان نیستند."))
-    validate_password(c.get("new_password1") or "")
-    return c
+    def clean_email(self):
+        e = (self.cleaned_data.get("email") or "").strip().lower()
+        if not e:
+            raise forms.ValidationError(_("ایمیل الزامی است."))
+        if User.objects.filter(email__iexact=e).exists():
+            raise forms.ValidationError(_("این ایمیل قبلاً ثبت شده است."))
+        return e
+
+    def clean_security_answer(self):
+        a = (self.cleaned_data.get("security_answer") or "").strip()
+        if len(a) < 2:
+            raise forms.ValidationError(_("پاسخ کوتاه است."))
+        return a
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = (self.cleaned_data.get("email") or "").strip().lower()
+        if commit:
+            user.save()
+            # Ensure profile + save security Q/A1
+            prof, _ = UserProfile.objects.get_or_create(user=user)
+            prof.q1 = self.cleaned_data.get("security_question")
+            ans = (self.cleaned_data.get("security_answer") or "").strip().lower()
+            prof.a1_hash = make_password(ans)
+            prof.save()
+        return user
 PY
+
+  cat > app/accounts/backends.py <<'PY'
+from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth import get_user_model
+from django.db.models import Q
+
+class EmailOrUsernameBackend(ModelBackend):
+  """Authenticate with either username OR email in the same login field."""
+  def authenticate(self, request, username=None, password=None, **kwargs):
+    UserModel = get_user_model()
+    identifier = (username or kwargs.get("email") or "").strip()
+    if not identifier or not password:
+      return None
+    try:
+      user = UserModel.objects.get(Q(username__iexact=identifier) | Q(email__iexact=identifier))
+    except UserModel.DoesNotExist:
+      # mitigate timing attacks
+      UserModel().set_password(password)
+      return None
+    if user.check_password(password) and self.user_can_authenticate(user):
+      return user
+    return None
+PY
+
 
   cat > app/accounts/views.py <<'PY'
 from django.contrib.auth.views import LoginView, LogoutView
