@@ -504,22 +504,68 @@ class SecurityQuestionAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user","phone","q1","q2","has_extra_data","updated_at")
-    list_select_related = ("user","q1","q2")
-    search_fields = ("user__email","user__username","phone")
-    readonly_fields = ("extra_data_display",)
+    list_display = ("user", "phone", "security_q1", "security_q2", "has_answers", "updated_at")
+    list_select_related = ("user", "q1", "q2")
+    search_fields = ("user__email", "user__username", "phone")
+    readonly_fields = ("security_info_display", "extra_data_display")
+    
+    fieldsets = (
+        ("اطلاعات کاربر", {"fields": ("user", "phone", "bio")}),
+        ("سوالات امنیتی", {"fields": ("q1", "q2", "security_info_display")}),
+        ("داده‌های اضافی", {"fields": ("extra_data_display",)}),
+    )
+
+    def security_q1(self, obj):
+        return obj.q1.text if obj.q1 else "-"
+    security_q1.short_description = "سوال امنیتی ۱"
+
+    def security_q2(self, obj):
+        return obj.q2.text if obj.q2 else "-"
+    security_q2.short_description = "سوال امنیتی ۲"
+
+    def has_answers(self, obj):
+        return bool(obj.a1_hash and obj.a2_hash)
+    has_answers.boolean = True
+    has_answers.short_description = "پاسخ‌ها تنظیم شده"
+
+    def security_info_display(self, obj):
+        from django.utils.html import format_html
+        html = "<div style='background:#f8f9fa;padding:10px;border-radius:5px;'>"
+        
+        if obj.q1:
+            html += f"<p><b>سوال ۱:</b> {obj.q1.text}</p>"
+            html += f"<p><b>پاسخ ۱:</b> {'✅ تنظیم شده (هش شده)' if obj.a1_hash else '❌ تنظیم نشده'}</p>"
+        else:
+            html += "<p><b>سوال ۱:</b> تنظیم نشده</p>"
+            
+        if obj.q2:
+            html += f"<p><b>سوال ۲:</b> {obj.q2.text}</p>"
+            html += f"<p><b>پاسخ ۲:</b> {'✅ تنظیم شده (هش شده)' if obj.a2_hash else '❌ تنظیم نشده'}</p>"
+        else:
+            html += "<p><b>سوال ۲:</b> تنظیم نشده</p>"
+            
+        html += "<p style='color:#666;font-size:0.9em;margin-top:10px;'>⚠️ پاسخ‌های امنیتی به صورت هش شده ذخیره می‌شوند و قابل مشاهده نیستند.</p>"
+        html += "</div>"
+        return format_html(html)
+    security_info_display.short_description = "اطلاعات امنیتی"
 
     def has_extra_data(self, obj):
-        return bool(obj.extra_data)
+        try:
+            return bool(obj.extra_data)
+        except Exception:
+            return False
     has_extra_data.boolean = True
     has_extra_data.short_description = "داده اضافی"
 
     def extra_data_display(self, obj):
-        if not obj.extra_data:
+        try:
+            if not obj.extra_data:
+                return "-"
+            from django.utils.html import format_html
+            lines = [f"<b>{k}:</b> {v}" for k, v in obj.extra_data.items()]
+            return format_html("<br>".join(lines))
+        except Exception:
             return "-"
-        from django.utils.html import format_html
-        lines = [f"<b>{k}:</b> {v}" for k, v in obj.extra_data.items()]
-        return format_html("<br>".join(lines))
     extra_data_display.short_description = "داده‌های اضافی"
 
 PY
@@ -876,9 +922,11 @@ def profile_edit(request):
 
   if not allow_edit:
     messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
-    return render(request, "accounts/profile.html", {"form": None, "profile": None, "allow_edit": False})
+    # Still show security questions info even when editing is disabled
+    profile = UserProfile.objects.filter(user=request.user).select_related("q1", "q2").first()
+    return render(request, "accounts/profile.html", {"form": None, "profile": profile, "allow_edit": False})
 
-  profile, _ = UserProfile.objects.get_or_create(user=request.user)
+  profile, _ = UserProfile.objects.select_related("q1", "q2").get_or_create(user=request.user)
   form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
 
   if request.method == "POST" and form.is_valid():
@@ -2144,31 +2192,61 @@ HTML
 {% extends "base.html" %}
 {% block title %}پروفایل{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
+<div class="mx-auto max-w-2xl space-y-4">
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
 
-  {% if not allow_edit %}
-    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
-      <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
-      <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
-    </div>
-  {% else %}
-    <form method="post" class="space-y-4">{% csrf_token %}
-      {% include "partials/form_errors.html" %}
-      {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div><label class="text-sm font-medium">شماره تماس</label>
-          <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
-        </div>
-        <div><label class="text-sm font-medium">بیو</label>
-          <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
-        </div>
+    {% if not allow_edit %}
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
+        <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
+        <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
       </div>
-      <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
-    </form>
-  {% endif %}
+    {% else %}
+      <form method="post" class="space-y-4">{% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div><label class="text-sm font-medium">شماره تماس</label>
+            <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
+          </div>
+          <div><label class="text-sm font-medium">بیو</label>
+            <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
+          </div>
+        </div>
+        <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+      </form>
+    {% endif %}
+  </div>
 
-  <div class="mt-4 text-sm"><a class="underline" href="/accounts/security/">مدیریت سوالات امنیتی</a></div>
+  <!-- Security Questions Info -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h2 class="text-lg font-bold mb-4">سوالات امنیتی</h2>
+    {% if profile.q1 or profile.q2 %}
+      <div class="space-y-3 text-sm">
+        {% if profile.q1 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۱</div>
+            <div class="font-medium">{{ profile.q1.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
+        {% if profile.q2 %}
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۲</div>
+            <div class="font-medium">{{ profile.q2.text }}</div>
+            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
+          </div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="text-slate-500 dark:text-slate-400 text-sm">
+        سوالات امنیتی تنظیم نشده است. برای امنیت بیشتر، سوالات امنیتی خود را تنظیم کنید.
+      </div>
+    {% endif %}
+    <div class="mt-4">
+      <a class="inline-block rounded-xl border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/security/">مدیریت سوالات امنیتی</a>
+    </div>
+  </div>
 </div>
 {% endblock %}
 HTML
@@ -2655,7 +2733,23 @@ try:
     UserProfile.objects.get_or_create(user=u)
     print("Admin user created/updated.")
 
-    qs=[("نام اولین معلم شما چه بود؟",1),("نام شهر محل تولد شما چیست؟",2),("نام بهترین دوست دوران کودکی شما چیست؟",3),("مدل اولین گوشی شما چه بود؟",4)]
+    qs=[
+        ("نام اولین معلم شما چه بود؟", 1),
+        ("نام شهر محل تولد شما چیست؟", 2),
+        ("نام بهترین دوست دوران کودکی شما چیست؟", 3),
+        ("مدل اولین گوشی شما چه بود؟", 4),
+        ("نام اولین حیوان خانگی شما چه بود؟", 5),
+        ("نام مادربزرگ مادری شما چیست؟", 6),
+        ("نام اولین مدرسه شما چه بود؟", 7),
+        ("رنگ مورد علاقه شما در کودکی چه بود؟", 8),
+        ("نام اولین خیابانی که در آن زندگی کردید چیست؟", 9),
+        ("غذای مورد علاقه دوران کودکی شما چه بود؟", 10),
+        ("نام بهترین دوست دوران دبیرستان شما چیست؟", 11),
+        ("شغل رویایی دوران کودکی شما چه بود؟", 12),
+        ("نام اولین فیلمی که در سینما دیدید چه بود؟", 13),
+        ("نام اولین کتابی که خواندید چه بود؟", 14),
+        ("تاریخ تولد پدر شما چیست؟", 15),
+    ]
     for t,o in qs:
         SecurityQuestion.objects.get_or_create(text=t, defaults={"order":o,"is_active":True})
     print("Security questions seeded.")
