@@ -1582,6 +1582,7 @@ PY
 
   cat > app/payments/forms.py <<'PY'
 from django import forms
+from django.utils.translation import gettext_lazy as _
 from .models import Order, WalletTopUpRequest
 _INPUT="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700"
 
