@@ -43,32 +43,25 @@ def profile_edit(request):
   except Exception:
     pass
 
+  profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
+
   if not allow_edit:
-    messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
-    # Still show security questions info even when editing is disabled
-    profile = UserProfile.objects.filter(user=request.user).select_related("q1").first()
     return render(request, "accounts/profile.html", {"form": None, "profile": profile, "allow_edit": False})
 
-  profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
-  form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
+  form = ProfileForm(request.POST or None, profile=profile)
 
   if request.method == "POST" and form.is_valid():
-    form.save()
-    profile.phone = (request.POST.get("phone") or "").strip()
-    profile.bio = (request.POST.get("bio") or "").strip()
-
-    # Save custom field data safely
+    # Save custom field data
     try:
       custom_data = form.get_custom_field_data()
       if custom_data:
         extra = getattr(profile, 'extra_data', None) or {}
         extra.update(custom_data)
         profile.extra_data = extra
-      profile.save()
+        profile.save(update_fields=["extra_data"])
+        messages.success(request, "پروفایل بروزرسانی شد.")
     except Exception:
-      profile.save(update_fields=["phone", "bio"])
-
-    messages.success(request, "پروفایل بروزرسانی شد.")
+      pass
     return redirect("profile_edit")
 
   return render(request, "accounts/profile.html", {"form": form, "profile": profile, "allow_edit": True})

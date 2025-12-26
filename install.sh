@@ -741,26 +741,20 @@ class RegisterForm(UserCreationForm):
             prof.save()
         return user
 
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = User
-        fields = ("first_name", "last_name", "email")
-        widgets = {
-            "first_name": forms.TextInput(attrs={"class": _INPUT}),
-            "last_name": forms.TextInput(attrs={"class": _INPUT}),
-            "email": forms.EmailInput(attrs={"class": _INPUT, "dir": "ltr"}),
-        }
+class ProfileForm(forms.Form):
+    """Profile form that only shows custom registration fields"""
 
     def __init__(self, *args, profile=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.profile = profile
         self._dynamic_fields = []
 
-        # Add dynamic fields that should show in profile
+        # Only add dynamic fields that should show in profile (from RegistrationField)
         try:
             for reg_field in get_registration_fields():
                 if not reg_field.show_in_profile:
                     continue
+                # Skip system fields
                 if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
                     continue
                 field = build_form_field(reg_field)
@@ -768,7 +762,7 @@ class ProfileForm(forms.ModelForm):
                 self.fields[field_name] = field
                 self._dynamic_fields.append(reg_field.field_key)
 
-                # Set initial value from profile extra_data (safely)
+                # Set initial value from profile extra_data
                 if profile:
                     extra_data = getattr(profile, 'extra_data', None) or {}
                     if reg_field.field_key in extra_data:
@@ -909,32 +903,25 @@ def profile_edit(request):
   except Exception:
     pass
 
+  profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
+
   if not allow_edit:
-    messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
-    # Still show security questions info even when editing is disabled
-    profile = UserProfile.objects.filter(user=request.user).select_related("q1").first()
     return render(request, "accounts/profile.html", {"form": None, "profile": profile, "allow_edit": False})
 
-  profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
-  form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
+  form = ProfileForm(request.POST or None, profile=profile)
 
   if request.method == "POST" and form.is_valid():
-    form.save()
-    profile.phone = (request.POST.get("phone") or "").strip()
-    profile.bio = (request.POST.get("bio") or "").strip()
-
-    # Save custom field data safely
+    # Save custom field data
     try:
       custom_data = form.get_custom_field_data()
       if custom_data:
         extra = getattr(profile, 'extra_data', None) or {}
         extra.update(custom_data)
         profile.extra_data = extra
-      profile.save()
+        profile.save(update_fields=["extra_data"])
+        messages.success(request, "پروفایل بروزرسانی شد.")
     except Exception:
-      profile.save(update_fields=["phone", "bio"])
-
-    messages.success(request, "پروفایل بروزرسانی شد.")
+      pass
     return redirect("profile_edit")
 
   return render(request, "accounts/profile.html", {"form": form, "profile": profile, "allow_edit": True})
@@ -2210,25 +2197,27 @@ HTML
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
     <h1 class="text-xl font-extrabold mb-4">پروفایل</h1>
 
+    <!-- User info -->
+    <div class="mb-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900">
+      <div class="text-sm text-slate-500 dark:text-slate-400">ایمیل</div>
+      <div class="font-medium" dir="ltr">{{ user.email }}</div>
+    </div>
+
     {% if not allow_edit %}
       <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
         <p class="font-semibold">ویرایش پروفایل غیرفعال است</p>
         <p class="text-sm mt-1">ویرایش پروفایل توسط مدیر سایت غیرفعال شده است.</p>
       </div>
-    {% else %}
+    {% elif form.fields %}
       <form method="post" class="space-y-4">{% csrf_token %}
         {% include "partials/form_errors.html" %}
         {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div><label class="text-sm font-medium">شماره تماس</label>
-            <input name="phone" value="{{ profile.phone }}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700" dir="ltr">
-          </div>
-          <div><label class="text-sm font-medium">بیو</label>
-            <textarea name="bio" rows="2" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-slate-300 dark:bg-slate-900 dark:border-slate-700 dark:focus:ring-slate-700">{{ profile.bio }}</textarea>
-          </div>
-        </div>
         <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
       </form>
+    {% else %}
+      <div class="text-slate-500 dark:text-slate-400 text-sm">
+        فیلد قابل ویرایشی وجود ندارد.
+      </div>
     {% endif %}
   </div>
 

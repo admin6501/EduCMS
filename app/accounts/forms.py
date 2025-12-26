@@ -167,26 +167,20 @@ class RegisterForm(UserCreationForm):
             prof.save()
         return user
 
-class ProfileForm(forms.ModelForm):
-    class Meta:
-        model = User
-        fields = ("first_name", "last_name", "email")
-        widgets = {
-            "first_name": forms.TextInput(attrs={"class": _INPUT}),
-            "last_name": forms.TextInput(attrs={"class": _INPUT}),
-            "email": forms.EmailInput(attrs={"class": _INPUT, "dir": "ltr"}),
-        }
+class ProfileForm(forms.Form):
+    """Profile form that only shows custom registration fields"""
 
     def __init__(self, *args, profile=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.profile = profile
         self._dynamic_fields = []
 
-        # Add dynamic fields that should show in profile
+        # Only add dynamic fields that should show in profile (from RegistrationField)
         try:
             for reg_field in get_registration_fields():
                 if not reg_field.show_in_profile:
                     continue
+                # Skip system fields
                 if reg_field.field_key in ("email", "password1", "password2", "security_question", "security_answer"):
                     continue
                 field = build_form_field(reg_field)
@@ -194,7 +188,7 @@ class ProfileForm(forms.ModelForm):
                 self.fields[field_name] = field
                 self._dynamic_fields.append(reg_field.field_key)
 
-                # Set initial value from profile extra_data (safely)
+                # Set initial value from profile extra_data
                 if profile:
                     extra_data = getattr(profile, 'extra_data', None) or {}
                     if reg_field.field_key in extra_data:
