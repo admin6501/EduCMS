@@ -460,13 +460,25 @@ class UserProfile(models.Model):
 
   @staticmethod
   def _norm(s): return (s or "").strip().lower()
-  def set_answers(self,a1,a2):
-    a1n=self._norm(a1); a2n=self._norm(a2)
+  
+  def set_answer(self, a1):
+    """Set single security answer"""
+    a1n = self._norm(a1)
+    self.a1_hash = make_password(a1n) if a1n else ""
+    
+  def check_answer(self, a1):
+    """Check single security answer"""
+    if not self.a1_hash: return False
+    return check_password(self._norm(a1), self.a1_hash)
+  
+  # Legacy methods for backwards compatibility
+  def set_answers(self,a1,a2=None):
+    a1n=self._norm(a1); a2n=self._norm(a2) if a2 else ""
     self.a1_hash = make_password(a1n) if a1n else ""
     self.a2_hash = make_password(a2n) if a2n else ""
-  def check_answers(self,a1,a2):
-    if not (self.a1_hash and self.a2_hash): return False
-    return check_password(self._norm(a1), self.a1_hash) and check_password(self._norm(a2), self.a2_hash)
+  def check_answers(self,a1,a2=None):
+    if not self.a1_hash: return False
+    return check_password(self._norm(a1), self.a1_hash)
 PY
   cat > app/accounts/admin.py <<'PY'
 from django.contrib import admin
@@ -504,47 +516,37 @@ class SecurityQuestionAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "phone", "security_q1", "security_q2", "has_answers", "updated_at")
-    list_select_related = ("user", "q1", "q2")
+    list_display = ("user", "phone", "security_question", "has_answer", "updated_at")
+    list_select_related = ("user", "q1")
     search_fields = ("user__email", "user__username", "phone")
     readonly_fields = ("security_info_display", "extra_data_display")
     
     fieldsets = (
         ("اطلاعات کاربر", {"fields": ("user", "phone", "bio")}),
-        ("سوالات امنیتی", {"fields": ("q1", "q2", "security_info_display")}),
+        ("سوال امنیتی", {"fields": ("q1", "security_info_display")}),
         ("داده‌های اضافی", {"fields": ("extra_data_display",)}),
     )
 
-    def security_q1(self, obj):
+    def security_question(self, obj):
         return obj.q1.text if obj.q1 else "-"
-    security_q1.short_description = "سوال امنیتی ۱"
+    security_question.short_description = "سوال امنیتی"
 
-    def security_q2(self, obj):
-        return obj.q2.text if obj.q2 else "-"
-    security_q2.short_description = "سوال امنیتی ۲"
-
-    def has_answers(self, obj):
-        return bool(obj.a1_hash and obj.a2_hash)
-    has_answers.boolean = True
-    has_answers.short_description = "پاسخ‌ها تنظیم شده"
+    def has_answer(self, obj):
+        return bool(obj.a1_hash)
+    has_answer.boolean = True
+    has_answer.short_description = "پاسخ تنظیم شده"
 
     def security_info_display(self, obj):
         from django.utils.html import format_html
         html = "<div style='background:#f8f9fa;padding:10px;border-radius:5px;'>"
         
         if obj.q1:
-            html += f"<p><b>سوال ۱:</b> {obj.q1.text}</p>"
-            html += f"<p><b>پاسخ ۱:</b> {'✅ تنظیم شده (هش شده)' if obj.a1_hash else '❌ تنظیم نشده'}</p>"
+            html += f"<p><b>سوال امنیتی:</b> {obj.q1.text}</p>"
+            html += f"<p><b>وضعیت پاسخ:</b> {'✅ تنظیم شده (هش شده)' if obj.a1_hash else '❌ تنظیم نشده'}</p>"
         else:
-            html += "<p><b>سوال ۱:</b> تنظیم نشده</p>"
+            html += "<p><b>سوال امنیتی:</b> تنظیم نشده</p>"
             
-        if obj.q2:
-            html += f"<p><b>سوال ۲:</b> {obj.q2.text}</p>"
-            html += f"<p><b>پاسخ ۲:</b> {'✅ تنظیم شده (هش شده)' if obj.a2_hash else '❌ تنظیم نشده'}</p>"
-        else:
-            html += "<p><b>سوال ۲:</b> تنظیم نشده</p>"
-            
-        html += "<p style='color:#666;font-size:0.9em;margin-top:10px;'>⚠️ پاسخ‌های امنیتی به صورت هش شده ذخیره می‌شوند و قابل مشاهده نیستند.</p>"
+        html += "<p style='color:#666;font-size:0.9em;margin-top:10px;'>⚠️ پاسخ امنیتی به صورت هش شده ذخیره می‌شود و قابل مشاهده نیست.</p>"
         html += "</div>"
         return format_html(html)
     security_info_display.short_description = "اطلاعات امنیتی"
@@ -787,44 +789,27 @@ class SecurityQuestionsForm(forms.Form):
     q1 = forms.ModelChoiceField(
         queryset=SecurityQuestion.objects.none(),
         required=True,
-        label=_("سوال امنیتی ۱"),
+        label=_("سوال امنیتی"),
         widget=forms.Select(attrs={"class": _INPUT})
     )
     a1 = forms.CharField(
         required=True,
-        label=_("پاسخ سوال ۱"),
-        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
-    )
-    q2 = forms.ModelChoiceField(
-        queryset=SecurityQuestion.objects.none(),
-        required=True,
-        label=_("سوال امنیتی ۲"),
-        widget=forms.Select(attrs={"class": _INPUT})
-    )
-    a2 = forms.CharField(
-        required=True,
-        label=_("پاسخ سوال ۲"),
+        label=_("پاسخ سوال امنیتی"),
         widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
     )
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        # Set querysets dynamically
+        # Set queryset dynamically
         try:
             qs = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
             self.fields['q1'].queryset = qs
-            self.fields['q2'].queryset = qs
         except Exception:
             pass
 
     def clean(self):
-        c = super().clean()
-        q1 = c.get("q1")
-        q2 = c.get("q2")
-        if q1 and q2 and q1 == q2:
-            raise forms.ValidationError(_("سوالات امنیتی باید متفاوت باشند."))
-        return c
+        return super().clean()
 
 class ResetStep1Form(forms.Form):
     identifier = forms.CharField(
@@ -834,11 +819,7 @@ class ResetStep1Form(forms.Form):
 
 class ResetStep2Form(forms.Form):
     a1 = forms.CharField(
-        label=_("پاسخ سوال ۱"),
-        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
-    )
-    a2 = forms.CharField(
-        label=_("پاسخ سوال ۲"),
+        label=_("پاسخ سوال امنیتی"),
         widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "off"})
     )
     new_password1 = forms.CharField(
@@ -923,10 +904,10 @@ def profile_edit(request):
   if not allow_edit:
     messages.error(request, "ویرایش پروفایل توسط مدیر غیرفعال شده است.")
     # Still show security questions info even when editing is disabled
-    profile = UserProfile.objects.filter(user=request.user).select_related("q1", "q2").first()
+    profile = UserProfile.objects.filter(user=request.user).select_related("q1").first()
     return render(request, "accounts/profile.html", {"form": None, "profile": profile, "allow_edit": False})
 
-  profile, _ = UserProfile.objects.select_related("q1", "q2").get_or_create(user=request.user)
+  profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
   form = ProfileForm(request.POST or None, instance=request.user, profile=profile)
 
   if request.method == "POST" and form.is_valid():
@@ -963,19 +944,18 @@ def security_questions(request):
     pass
 
   if not allow_edit:
-    messages.error(request, "تغییر سوالات امنیتی توسط مدیر غیرفعال شده است.")
+    messages.error(request, "تغییر سوال امنیتی توسط مدیر غیرفعال شده است.")
     return render(request, "accounts/security_questions.html", {"form": None, "allow_edit": False})
 
   profile,_ = UserProfile.objects.get_or_create(user=request.user)
   init={}
   if profile.q1: init["q1"]=profile.q1
-  if profile.q2: init["q2"]=profile.q2
   form = SecurityQuestionsForm(request.POST or None, user=request.user, initial=init)
   if request.method=="POST" and form.is_valid():
-    profile.q1=form.cleaned_data["q1"]; profile.q2=form.cleaned_data["q2"]
-    profile.set_answers(form.cleaned_data["a1"], form.cleaned_data["a2"])
-    profile.save(update_fields=["q1","q2","a1_hash","a2_hash"])
-    messages.success(request,"سوالات امنیتی بروزرسانی شد.")
+    profile.q1=form.cleaned_data["q1"]
+    profile.set_answer(form.cleaned_data["a1"])
+    profile.save(update_fields=["q1","a1_hash"])
+    messages.success(request,"سوال امنیتی بروزرسانی شد.")
     return redirect("security_questions")
   return render(request,"accounts/security_questions.html",{"form":form, "allow_edit": True})
 
@@ -987,9 +967,9 @@ def reset_step1(request):
     if not user:
       messages.error(request,"کاربر پیدا نشد.")
       return redirect("reset_step1")
-    profile = UserProfile.objects.filter(user=user).select_related("q1","q2").first()
-    if not profile or not (profile.q1 and profile.q2 and profile.a1_hash and profile.a2_hash):
-      messages.error(request,"برای این کاربر سوالات امنیتی تنظیم نشده است.")
+    profile = UserProfile.objects.filter(user=user).select_related("q1").first()
+    if not profile or not (profile.q1 and profile.a1_hash):
+      messages.error(request,"برای این کاربر سوال امنیتی تنظیم نشده است.")
       return redirect("reset_step1")
     request.session["reset_user_id"]=str(user.id)
     return redirect("reset_step2")
@@ -1001,19 +981,19 @@ def reset_step2(request):
   user=User.objects.filter(id=uid).first()
   if not user:
     request.session.pop("reset_user_id",None); return redirect("reset_step1")
-  profile=UserProfile.objects.filter(user=user).select_related("q1","q2").first()
-  if not profile or not (profile.q1 and profile.q2):
+  profile=UserProfile.objects.filter(user=user).select_related("q1").first()
+  if not profile or not profile.q1:
     request.session.pop("reset_user_id",None); return redirect("reset_step1")
   form=ResetStep2Form(request.POST or None)
   if request.method=="POST" and form.is_valid():
-    if not profile.check_answers(form.cleaned_data["a1"], form.cleaned_data["a2"]):
-      messages.error(request,"پاسخ‌ها صحیح نیست.")
+    if not profile.check_answer(form.cleaned_data["a1"]):
+      messages.error(request,"پاسخ صحیح نیست.")
       return redirect("reset_step2")
     user.set_password(form.cleaned_data["new_password1"]); user.save(update_fields=["password"])
     request.session.pop("reset_user_id",None)
     messages.success(request,"رمز تغییر کرد. وارد شوید.")
     return redirect("login")
-  return render(request,"accounts/reset_step2.html",{"form":form,"q1":profile.q1.text,"q2":profile.q2.text,"username":user.username})
+  return render(request,"accounts/reset_step2.html",{"form":form,"q1":profile.q1.text,"username":user.username})
 PY
 
   cat > app/accounts/urls.py <<'PY'
@@ -1050,7 +1030,7 @@ class SiteSetting(models.Model):
   footer_text = models.TextField(blank=True, verbose_name=_("متن فوتر"))
   admin_path = models.SlugField(max_length=50, default="admin", verbose_name=_("مسیر ادمین"))
   allow_profile_edit = models.BooleanField(default=True, verbose_name=_("اجازه ویرایش پروفایل توسط کاربران"))
-  allow_security_edit = models.BooleanField(default=True, verbose_name=_("اجازه تغییر سوالات امنیتی توسط کاربران"))
+  allow_security_edit = models.BooleanField(default=True, verbose_name=_("اجازه تغییر سوال امنیتی توسط کاربران"))
   updated_at = models.DateTimeField(auto_now=True)
   class Meta:
     verbose_name=_("تنظیمات سایت"); verbose_name_plural=_("تنظیمات سایت")
@@ -2073,7 +2053,7 @@ HTML
       <div class="grid gap-2 text-sm">
         <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/wallet/">کیف پول</a>
         <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/invoices/">فاکتورها</a>
-        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/accounts/security/">سوالات امنیتی</a>
+        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/accounts/security/">سوال امنیتی</a>
       </div>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
@@ -2218,33 +2198,22 @@ HTML
     {% endif %}
   </div>
 
-  <!-- Security Questions Info -->
+  <!-- Security Question Info -->
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-    <h2 class="text-lg font-bold mb-4">سوالات امنیتی</h2>
-    {% if profile.q1 or profile.q2 %}
-      <div class="space-y-3 text-sm">
-        {% if profile.q1 %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۱</div>
-            <div class="font-medium">{{ profile.q1.text }}</div>
-            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
-          </div>
-        {% endif %}
-        {% if profile.q2 %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-            <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی ۲</div>
-            <div class="font-medium">{{ profile.q2.text }}</div>
-            <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
-          </div>
-        {% endif %}
+    <h2 class="text-lg font-bold mb-4">سوال امنیتی</h2>
+    {% if profile.q1 %}
+      <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+        <div class="text-slate-500 dark:text-slate-400 text-xs mb-1">سوال امنیتی شما</div>
+        <div class="font-medium">{{ profile.q1.text }}</div>
+        <div class="text-emerald-600 dark:text-emerald-400 text-xs mt-1">✓ پاسخ تنظیم شده</div>
       </div>
     {% else %}
       <div class="text-slate-500 dark:text-slate-400 text-sm">
-        سوالات امنیتی تنظیم نشده است. برای امنیت بیشتر، سوالات امنیتی خود را تنظیم کنید.
+        سوال امنیتی تنظیم نشده است. برای امنیت بیشتر، سوال امنیتی خود را تنظیم کنید.
       </div>
     {% endif %}
     <div class="mt-4">
-      <a class="inline-block rounded-xl border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/security/">مدیریت سوالات امنیتی</a>
+      <a class="inline-block rounded-xl border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" href="/accounts/security/">مدیریت سوال امنیتی</a>
     </div>
   </div>
 </div>
@@ -2252,17 +2221,18 @@ HTML
 HTML
   cat > app/templates/accounts/security_questions.html <<'HTML'
 {% extends "base.html" %}
-{% block title %}سوالات امنیتی{% endblock %}
+{% block title %}سوال امنیتی{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">سوالات امنیتی</h1>
+  <h1 class="text-xl font-extrabold mb-4">سوال امنیتی</h1>
 
   {% if not allow_edit %}
     <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
-      <p class="font-semibold">تغییر سوالات امنیتی غیرفعال است</p>
-      <p class="text-sm mt-1">تغییر سوالات امنیتی توسط مدیر سایت غیرفعال شده است.</p>
+      <p class="font-semibold">تغییر سوال امنیتی غیرفعال است</p>
+      <p class="text-sm mt-1">تغییر سوال امنیتی توسط مدیر سایت غیرفعال شده است.</p>
     </div>
   {% else %}
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">سوال امنیتی برای بازیابی رمز عبور استفاده می‌شود. لطفاً سوالی انتخاب کنید که پاسخ آن را فقط خودتان می‌دانید.</p>
     <form method="post" class="space-y-4">{% csrf_token %}
       {% include "partials/form_errors.html" %}
       {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
@@ -2288,15 +2258,17 @@ HTML
 HTML
   cat > app/templates/accounts/reset_step2.html <<'HTML'
 {% extends "base.html" %}
-{% block title %}تایید سوالات امنیتی{% endblock %}
+{% block title %}تایید سوال امنیتی{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">تایید سوالات امنیتی</h1>
+  <h1 class="text-xl font-extrabold mb-4">تایید سوال امنیتی</h1>
   <div class="text-sm text-slate-500 dark:text-slate-300 mb-4">کاربر: <b dir="ltr">{{ username }}</b></div>
   <form method="post" class="space-y-4">{% csrf_token %}
     {% include "partials/form_errors.html" %}
-    <div class="space-y-1"><div class="text-sm font-medium">{{ q1 }}</div>{{ form.a1 }}</div>
-    <div class="space-y-1"><div class="text-sm font-medium">{{ q2 }}</div>{{ form.a2 }}</div>
+    <div class="space-y-1">
+      <div class="text-sm font-medium">{{ q1 }}</div>
+      {{ form.a1 }}
+    </div>
     {% include "partials/field.html" with field=form.new_password1 %}
     {% include "partials/field.html" with field=form.new_password2 %}
     <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">تغییر رمز</button>
