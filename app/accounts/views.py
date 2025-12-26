@@ -26,8 +26,8 @@ class RegisterView(CreateView):
   def form_valid(self, form):
     from django.contrib.auth import login
     response = super().form_valid(form)
-    # Auto login after registration
-    login(self.request, self.object)
+    # Auto login after registration - specify backend
+    login(self.request, self.object, backend='accounts.backends.EmailOrUsernameBackend')
     messages.success(self.request, "حساب کاربری شما با موفقیت ایجاد شد. خوش آمدید!")
     return response
 
