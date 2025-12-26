@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}ثبت تیکت{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+  <h1 class="text-xl font-extrabold mb-4">ثبت تیکت</h1>
+  <form method="post" enctype="multipart/form-data" class="space-y-4">{% csrf_token %}
+    {% include "partials/form_errors.html" %}
+    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+    <button class="rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ثبت</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}شارژ کیف پول{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-xl space-y-4">
+  <!-- Header -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-extrabold mb-2">درخواست شارژ کیف پول</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+      برای شارژ کیف پول، مبلغ مورد نظر خود را وارد کنید. پس از بررسی توسط مدیر، مبلغ به کیف پول شما اضافه می‌شود.
+    </p>
+  </div>
+
+  <!-- Bank Info -->
+  {% if bank_info %}
+  <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/40">
+    <div class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">اطلاعات کارت به کارت</div>
+    {% if bank_info.card_number %}
+    <div class="text-sm text-blue-700 dark:text-blue-300 mb-1">
+      <span class="font-medium">شماره کارت:</span>
+      <span dir="ltr" class="font-mono">{{ bank_info.card_number }}</span>
+    </div>
+    {% endif %}
+    {% if bank_info.account_holder %}
+    <div class="text-sm text-blue-700 dark:text-blue-300 mb-1">
+      <span class="font-medium">به نام:</span> {{ bank_info.account_holder }}
+    </div>
+    {% endif %}
+    {% if bank_info.sheba %}
+    <div class="text-sm text-blue-700 dark:text-blue-300">
+      <span class="font-medium">شبا:</span>
+      <span dir="ltr" class="font-mono text-xs">{{ bank_info.sheba }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Form -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <form method="post" enctype="multipart/form-data" class="space-y-5">{% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      
+      <!-- Amount Field - Highlighted -->
+      <div class="space-y-1">
+        <label for="{{ form.amount.id_for_label }}" class="block text-sm font-semibold">
+          {{ form.amount.label }}
+          <span class="text-red-500">*</span>
+        </label>
+        {{ form.amount }}
+        {% if form.amount.help_text %}
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.amount.help_text }}</p>
+        {% endif %}
+        {% if form.amount.errors %}
+        <p class="text-xs text-red-500">{{ form.amount.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Note Field -->
+      <div class="space-y-1">
+        <label for="{{ form.note.id_for_label }}" class="block text-sm font-medium">
+          {{ form.note.label }}
+        </label>
+        {{ form.note }}
+        {% if form.note.help_text %}
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.note.help_text }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Optional Fields Collapsible -->
+      <details class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        <summary class="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+          اطلاعات پرداخت (اختیاری)
+        </summary>
+        <div class="mt-4 space-y-4">
+          <!-- Receipt Image -->
+          <div class="space-y-1">
+            <label for="{{ form.receipt_image.id_for_label }}" class="block text-sm font-medium">
+              {{ form.receipt_image.label }}
+            </label>
+            {{ form.receipt_image }}
+            {% if form.receipt_image.help_text %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.receipt_image.help_text }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Tracking Code -->
+          <div class="space-y-1">
+            <label for="{{ form.tracking_code.id_for_label }}" class="block text-sm font-medium">
+              {{ form.tracking_code.label }}
+            </label>
+            {{ form.tracking_code }}
+            {% if form.tracking_code.help_text %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.tracking_code.help_text }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+
+      <button class="w-full rounded-xl bg-emerald-600 px-4 py-3 text-white font-semibold hover:bg-emerald-700 transition-colors">
+        ثبت درخواست شارژ
+      </button>
+    </form>
+  </div>
+
+  <!-- Back Link -->
+  <div class="text-center">
+    <a href="/wallet/" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+      ← بازگشت به کیف پول
+    </a>
+  </div>
+</div>
+{% endblock %}

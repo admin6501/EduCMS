@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}دوره‌ها{% endblock %}
+{% block content %}
+<div class="mb-6 flex items-end justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-extrabold">{{ tpl.home_title|default:"دوره‌های آموزشی" }}</h1>
+    <div class="text-sm text-slate-500 dark:text-slate-300">{{ tpl.home_subtitle|default:"جدیدترین دوره‌ها" }}</div>
+  </div>
+</div>
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  {% for c in object_list %}
+    <a href="/courses/{{ c.slug }}/" class="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-950">
+      <div class="aspect-[16/9] bg-slate-100 dark:bg-slate-900">
+        {% if c.cover %}<img class="h-full w-full object-cover" src="{{ c.cover.url }}" alt="{{ c.title }}">{% endif %}
+      </div>
+      <div class="p-4">
+        <div class="font-bold">{{ c.title }}</div>
+        <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ c.summary|default:"—" }}</div>
+        <div class="mt-3 text-sm">
+          {% if c.is_free_for_all or not c.price_toman %}
+            <span class="rounded-xl bg-emerald-600 px-3 py-1 text-white">رایگان</span>
+          {% else %}
+            <span class="rounded-xl bg-slate-900 px-3 py-1 text-white dark:bg-white dark:text-slate-900">{{ c.price_toman }} تومان</span>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+  {% empty %}
+    <div class="text-slate-500 dark:text-slate-300">{{ tpl.home_empty|default:"هنوز دوره‌ای منتشر نشده است." }}</div>
+  {% endfor %}
+</div>
+{% endblock %}

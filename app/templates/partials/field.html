@@ -1,0 +1,6 @@
+<div class="space-y-1">
+  <label class="text-sm font-medium">{{ field.label }}</label>
+  {{ field }}
+  {% if field.help_text %}<div class="text-xs text-slate-500 dark:text-slate-300">{{ field.help_text }}</div>{% endif %}
+  {% if field.errors %}<div class="text-xs text-rose-600 dark:text-rose-300">{{ field.errors }}</div>{% endif %}
+</div>

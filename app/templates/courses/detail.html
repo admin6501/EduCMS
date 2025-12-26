@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ object.title }}{% endblock %}
+{% block content %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2 space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+      <h1 class="text-2xl font-extrabold mb-2">{{ object.title }}</h1>
+      <div class="text-slate-600 dark:text-slate-300">{{ object.description|linebreaks }}</div>
+    </div>
+  </div>
+  <aside class="space-y-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+      {% if has_access %}
+        <div class="rounded-xl bg-emerald-600 px-4 py-2 text-white text-sm">دسترسی شما فعال است.</div>
+      {% else %}
+        {% if object.is_free_for_all or not object.price_toman %}
+          <div class="rounded-xl bg-emerald-600 px-4 py-2 text-white text-sm">این دوره رایگان است.</div>
+        {% else %}
+          <div class="text-sm text-slate-500 dark:text-slate-300">قیمت</div>
+          <div class="text-2xl font-extrabold mt-1">{{ object.price_toman }} تومان</div>
+          <a class="mt-4 block rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/checkout/{{ object.slug }}/">پرداخت</a>
+          <div class="mt-2 text-xs text-slate-500 dark:text-slate-300">کارت‌به‌کارت یا کیف پول</div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </aside>
+</div>
+{% endblock %}
