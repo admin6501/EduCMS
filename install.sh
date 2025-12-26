@@ -1491,14 +1491,14 @@ class TopUpStatus(models.TextChoices):
 
 class WalletTopUpRequest(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="topups")
-  amount=models.PositiveIntegerField()
-  receipt_image=models.ImageField(upload_to="wallet/topups/", blank=True, null=True)
-  tracking_code=models.CharField(max_length=80, blank=True)
-  note=models.TextField(blank=True)
-  status=models.CharField(max_length=20, choices=TopUpStatus.choices, default=TopUpStatus.PENDING)
-  created_at=models.DateTimeField(auto_now_add=True)
-  reviewed_at=models.DateTimeField(blank=True, null=True)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="topups", verbose_name=_("کاربر"))
+  amount=models.PositiveIntegerField(verbose_name=_("مبلغ (تومان)"))
+  receipt_image=models.ImageField(upload_to="wallet/topups/", blank=True, null=True, verbose_name=_("تصویر رسید"))
+  tracking_code=models.CharField(max_length=80, blank=True, verbose_name=_("کد پیگیری"))
+  note=models.TextField(blank=True, verbose_name=_("توضیحات"))
+  status=models.CharField(max_length=20, choices=TopUpStatus.choices, default=TopUpStatus.PENDING, verbose_name=_("وضعیت"))
+  created_at=models.DateTimeField(auto_now_add=True, verbose_name=_("تاریخ ثبت"))
+  reviewed_at=models.DateTimeField(blank=True, null=True, verbose_name=_("تاریخ بررسی"))
   class Meta:
     ordering=["-created_at"]; verbose_name=_("درخواست شارژ"); verbose_name_plural=_("درخواست‌های شارژ")
 
@@ -1580,10 +1580,24 @@ class CouponApplyForm(forms.Form):
 class WalletTopUpForm(forms.ModelForm):
   class Meta:
     model=WalletTopUpRequest
-    fields=("amount","receipt_image","tracking_code","note")
-    widgets={"amount": forms.NumberInput(attrs={"class":_INPUT,"dir":"ltr"}),
-             "tracking_code": forms.TextInput(attrs={"class":_INPUT,"dir":"ltr"}),
-             "note": forms.Textarea(attrs={"class":_INPUT,"rows":3})}
+    fields=("amount","note","receipt_image","tracking_code")
+    labels={
+      "amount": _("مبلغ شارژ (تومان)"),
+      "note": _("توضیحات (اختیاری)"),
+      "receipt_image": _("تصویر رسید (اختیاری)"),
+      "tracking_code": _("کد پیگیری (اختیاری)"),
+    }
+    help_texts={
+      "amount": _("مبلغ مورد نظر برای شارژ کیف پول را به تومان وارد کنید."),
+      "note": _("در صورت نیاز توضیحات خود را بنویسید."),
+      "receipt_image": _("اگر کارت به کارت کرده‌اید، تصویر رسید را آپلود کنید."),
+      "tracking_code": _("کد پیگیری یا شماره مرجع تراکنش بانکی"),
+    }
+    widgets={
+      "amount": forms.NumberInput(attrs={"class":_INPUT,"dir":"ltr","placeholder":"مثال: 50000"}),
+      "tracking_code": forms.TextInput(attrs={"class":_INPUT,"dir":"ltr","placeholder":"کد پیگیری بانکی"}),
+      "note": forms.Textarea(attrs={"class":_INPUT,"rows":3,"placeholder":"توضیحات اضافی..."})
+    }
 PY
 
   cat > app/payments/views.py <<'PY'
@@ -1710,9 +1724,10 @@ def wallet_topup(request):
   form=WalletTopUpForm(request.POST or None, request.FILES or None)
   if request.method=="POST" and form.is_valid():
     t=form.save(commit=False); t.user=request.user; t.status=TopUpStatus.PENDING; t.save()
-    messages.success(request,"درخواست شارژ ثبت شد.")
+    messages.success(request,"درخواست شارژ با موفقیت ثبت شد. پس از بررسی، مبلغ به کیف پول شما اضافه می‌شود.")
     return redirect("wallet_home")
-  return render(request,"wallet/topup.html",{"form":form})
+  bank_info = BankTransferSetting.objects.first()
+  return render(request,"wallet/topup.html",{"form":form, "bank_info":bank_info})
 
 @login_required
 def invoice_list(request):
@@ -2378,36 +2393,69 @@ HTML
 {% block title %}کیف پول{% endblock %}
 {% block content %}
 <div class="mx-auto max-w-4xl space-y-4">
-  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-    <div class="flex items-center justify-between gap-3">
+  <!-- Balance Card -->
+  <div class="rounded-2xl border border-slate-200 bg-gradient-to-l from-emerald-50 to-white p-6 dark:border-slate-800 dark:from-emerald-950/30 dark:to-slate-950">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
       <div>
-        <h1 class="text-xl font-extrabold">کیف پول</h1>
-        <div class="text-sm text-slate-500 dark:text-slate-300">موجودی: <b>{{ wallet.balance }}</b> تومان</div>
+        <h1 class="text-xl font-extrabold mb-1">کیف پول</h1>
+        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+          {{ wallet.balance|default:0 }}
+          <span class="text-sm font-normal text-slate-500 dark:text-slate-400">تومان</span>
+        </div>
       </div>
-      <a class="rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/wallet/topup/">درخواست شارژ</a>
+      <a class="rounded-xl bg-emerald-600 px-5 py-2.5 text-white font-semibold hover:bg-emerald-700 transition-colors" href="/wallet/topup/">
+        + درخواست شارژ
+      </a>
     </div>
   </div>
 
   <div class="grid gap-4 lg:grid-cols-2">
+    <!-- Transactions -->
     <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
       <h2 class="font-bold mb-3">تراکنش‌ها</h2>
-      <div class="space-y-2 text-sm">
+      <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
         {% for t in txns %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800 flex items-center justify-between">
-            <div>{{ t.get_kind_display }}</div>
-            <div class="{% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">{% if t.amount >= 0 %}+{% endif %}{{ t.amount }}</div>
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <div class="text-slate-600 dark:text-slate-300">{{ t.get_kind_display }}</div>
+              <div class="font-bold {% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
+                {% if t.amount >= 0 %}+{% endif %}{{ t.amount }} تومان
+              </div>
+            </div>
+            {% if t.description %}
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ t.description }}</div>
+            {% endif %}
+            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ t.created_at|date:"Y/m/d H:i" }}</div>
           </div>
-        {% empty %}<div class="text-slate-500 dark:text-slate-300">تراکنشی ندارید.</div>{% endfor %}
+        {% empty %}
+          <div class="text-slate-500 dark:text-slate-400 text-center py-4">تراکنشی ندارید.</div>
+        {% endfor %}
       </div>
     </div>
+
+    <!-- Top-up Requests -->
     <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
       <h2 class="font-bold mb-3">درخواست‌های شارژ</h2>
-      <div class="space-y-2 text-sm">
+      <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
         {% for r in topups %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800 flex items-center justify-between">
-            <div><b>{{ r.amount }}</b> تومان</div><div>{{ r.get_status_display }}</div>
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <div class="font-bold">{{ r.amount }} تومان</div>
+              <div class="px-2 py-0.5 rounded-lg text-xs font-medium
+                {% if r.status == 'approved' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
+                {% elif r.status == 'rejected' %}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300
+                {% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% endif %}">
+                {{ r.get_status_display }}
+              </div>
+            </div>
+            {% if r.note %}
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ r.note|truncatechars:50 }}</div>
+            {% endif %}
+            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ r.created_at|date:"Y/m/d H:i" }}</div>
           </div>
-        {% empty %}<div class="text-slate-500 dark:text-slate-300">درخواستی ندارید.</div>{% endfor %}
+        {% empty %}
+          <div class="text-slate-500 dark:text-slate-400 text-center py-4">درخواستی ندارید.</div>
+        {% endfor %}
       </div>
     </div>
   </div>
@@ -2419,13 +2467,112 @@ HTML
 {% extends "base.html" %}
 {% block title %}شارژ کیف پول{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-4">درخواست شارژ</h1>
-  <form method="post" enctype="multipart/form-data" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ثبت</button>
-  </form>
+<div class="mx-auto max-w-xl space-y-4">
+  <!-- Header -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <h1 class="text-xl font-extrabold mb-2">درخواست شارژ کیف پول</h1>
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+      برای شارژ کیف پول، مبلغ مورد نظر خود را وارد کنید. پس از بررسی توسط مدیر، مبلغ به کیف پول شما اضافه می‌شود.
+    </p>
+  </div>
+
+  <!-- Bank Info -->
+  {% if bank_info %}
+  <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/40">
+    <div class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">اطلاعات کارت به کارت</div>
+    {% if bank_info.card_number %}
+    <div class="text-sm text-blue-700 dark:text-blue-300 mb-1">
+      <span class="font-medium">شماره کارت:</span>
+      <span dir="ltr" class="font-mono">{{ bank_info.card_number }}</span>
+    </div>
+    {% endif %}
+    {% if bank_info.account_holder %}
+    <div class="text-sm text-blue-700 dark:text-blue-300 mb-1">
+      <span class="font-medium">به نام:</span> {{ bank_info.account_holder }}
+    </div>
+    {% endif %}
+    {% if bank_info.sheba %}
+    <div class="text-sm text-blue-700 dark:text-blue-300">
+      <span class="font-medium">شبا:</span>
+      <span dir="ltr" class="font-mono text-xs">{{ bank_info.sheba }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Form -->
+  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <form method="post" enctype="multipart/form-data" class="space-y-5">{% csrf_token %}
+      {% include "partials/form_errors.html" %}
+      
+      <!-- Amount Field - Highlighted -->
+      <div class="space-y-1">
+        <label for="{{ form.amount.id_for_label }}" class="block text-sm font-semibold">
+          {{ form.amount.label }}
+          <span class="text-red-500">*</span>
+        </label>
+        {{ form.amount }}
+        {% if form.amount.help_text %}
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.amount.help_text }}</p>
+        {% endif %}
+        {% if form.amount.errors %}
+        <p class="text-xs text-red-500">{{ form.amount.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Note Field -->
+      <div class="space-y-1">
+        <label for="{{ form.note.id_for_label }}" class="block text-sm font-medium">
+          {{ form.note.label }}
+        </label>
+        {{ form.note }}
+        {% if form.note.help_text %}
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.note.help_text }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Optional Fields Collapsible -->
+      <details class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        <summary class="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">
+          اطلاعات پرداخت (اختیاری)
+        </summary>
+        <div class="mt-4 space-y-4">
+          <!-- Receipt Image -->
+          <div class="space-y-1">
+            <label for="{{ form.receipt_image.id_for_label }}" class="block text-sm font-medium">
+              {{ form.receipt_image.label }}
+            </label>
+            {{ form.receipt_image }}
+            {% if form.receipt_image.help_text %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.receipt_image.help_text }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Tracking Code -->
+          <div class="space-y-1">
+            <label for="{{ form.tracking_code.id_for_label }}" class="block text-sm font-medium">
+              {{ form.tracking_code.label }}
+            </label>
+            {{ form.tracking_code }}
+            {% if form.tracking_code.help_text %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ form.tracking_code.help_text }}</p>
+            {% endif %}
+          </div>
+        </div>
+      </details>
+
+      <button class="w-full rounded-xl bg-emerald-600 px-4 py-3 text-white font-semibold hover:bg-emerald-700 transition-colors">
+        ثبت درخواست شارژ
+      </button>
+    </form>
+  </div>
+
+  <!-- Back Link -->
+  <div class="text-center">
+    <a href="/wallet/" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+      ← بازگشت به کیف پول
+    </a>
+  </div>
 </div>
 {% endblock %}
 HTML
