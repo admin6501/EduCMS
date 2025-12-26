@@ -889,6 +889,11 @@ class RegisterView(CreateView):
   template_name="accounts/register.html"
   success_url=reverse_lazy("login")
 
+  def form_valid(self, form):
+    response = super().form_valid(form)
+    messages.success(self.request, "حساب کاربری شما با موفقیت ایجاد شد. لطفاً وارد شوید.")
+    return response
+
 @login_required
 def profile_edit(request):
   # Check if profile editing is allowed
