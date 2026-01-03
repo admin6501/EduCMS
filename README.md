@@ -1,126 +1,234 @@
 <div align="center">
 
 # 🎓 EduCMS
-### A Modern Education CMS built with Django & Docker
+### سیستم مدیریت آموزش مدرن مبتنی بر Django و Docker
 
-[🚀 Quick Install](#-quick-install) •
-[✨ Features](#-features) •
-[🧠 Architecture](#-architecture--tech-stack) •
-[⚙️ Management](#️-management--configuration) •
-[🔐 Security](#-security-notes) •
-[📄 License](#-license)
+[🚀 نصب سریع](#-نصب-سریع) •
+[✨ امکانات](#-امکانات-کامل) •
+[🧠 معماری](#-معماری-و-تکنولوژی) •
+[⚙️ مدیریت](#️-مدیریت-و-نگهداری) •
+[🔐 امنیت](#-نکات-امنیتی) •
+[📄 لایسنس](#-لایسنس)
 
 </div>
 
 ---
 
-## 📌 Overview
+## 📌 معرفی
 
-**EduCMS** is a production-ready **Education CMS / LMS** designed for selling and managing online courses.  
-It provides a complete workflow for **users, courses, payments, wallet, invoices, and support tickets**, with a **one-command Docker-based deployment**.
+**EduCMS** یک سیستم مدیریت آموزش (Education CMS / LMS) حرفه‌ای و آماده‌ی استفاده در محیط واقعی است که برای **فروش، مدیریت و ارائه دوره‌های آموزشی آنلاین** طراحی شده است.
 
-The project focuses on:
-- Real-world payment scenarios
-- High security
-- Fast deployment
-- Clean, extensible architecture
+این پروژه بر اساس بررسی کامل فایل نصب (`install.sh`) و کدهای اصلی توسعه داده شده و با تمرکز بر موارد زیر ساخته شده است:
 
----
-
-## ✨ Features
-
-### 👤 User & Authentication System
-- Login with **email or username**
-- User registration with **dynamic custom fields**
-- **Security question** system for password recovery
-- User profile management
-- Admin-controlled permissions for profile & security editing
-
-### 🎓 Course Management
-- Course categories
-- Free and paid courses
-- Publishing states (draft / published / archived)
-- Sections & lessons with video/text content
-- Access via purchase, free access, or admin grants
-
-### 💳 Orders & Payments
-- Card-to-card payment workflow
-- Receipt upload & tracking codes
-- Order lifecycle management
-- Coupon system (percentage / fixed amount)
-
-### 👛 Wallet System
-- Dedicated wallet per user
-- Top-up requests with admin approval
-- Full transaction history
-
-### 🧾 Invoice System
-- Automatic invoice generation
-- Unique invoice numbers
-- User-accessible invoices
-
-### 🎫 Support Tickets
-- User-created tickets
-- Threaded replies
-- Dashboard integration
-
-### 📊 User Dashboard
-- Courses
-- Orders
-- Wallet
-- Tickets
-
-### ⚙️ Admin & Site Settings
-- Custom admin panel path
-- Branding & theme settings
-- Dynamic registration fields
-- Navigation & template management
+- نصب کاملاً خودکار با یک دستور
+- امنیت بالا در سطح سرور و اپلیکیشن
+- پوشش سناریوهای واقعی پرداخت
+- معماری تمیز و توسعه‌پذیر
+- مناسب راه‌اندازی محصول SaaS یا پروژه آموزشی جدی
 
 ---
 
-## 🧠 Architecture & Tech Stack
+## ✨ امکانات کامل
+
+### 👤 کاربران و احراز هویت
+- ثبت‌نام و ورود با **ایمیل یا نام کاربری**
+- سیستم **سؤال امنیتی** برای افزایش امنیت حساب
+- بازیابی رمز عبور بر اساس سؤال امنیتی
+- پروفایل کاربری با فیلدهای پویا (Dynamic Registration Fields)
+- امکان فعال/غیرفعال کردن ویرایش پروفایل و سؤال امنیتی توسط مدیر
+- ذخیره پاسخ‌های امنیتی به‌صورت **هش‌شده**
+
+---
+
+### 🎓 مدیریت دوره‌ها
+- دسته‌بندی دوره‌ها
+- تعریف دوره رایگان یا پولی
+- وضعیت انتشار دوره:
+  - پیش‌نویس
+  - منتشر شده
+  - آرشیو
+- ساختار دوره:
+  - سرفصل‌ها
+  - درس‌ها
+  - محتوای متنی
+  - ویدیو
+- کنترل دسترسی به دوره‌ها از طریق:
+  - خرید
+  - دسترسی اهدایی (Grant)
+  - رایگان بودن برای همه کاربران
+
+---
+
+### 💳 سفارش و پرداخت
+- سیستم سفارش دوره
+- پرداخت **کارت‌به‌کارت**
+- آپلود تصویر رسید پرداخت
+- ثبت کد پیگیری
+- چرخه وضعیت سفارش:
+  - در انتظار پرداخت
+  - در انتظار تایید
+  - پرداخت شده
+  - رد شده
+  - لغو شده
+- سیستم **کد تخفیف**:
+  - درصدی
+  - مبلغی
+  - محدودیت تعداد استفاده
+  - محدودیت زمانی
+  - محدودیت استفاده برای هر کاربر
+
+---
+
+### 👛 کیف پول
+- کیف پول اختصاصی برای هر کاربر
+- نمایش موجودی کیف پول
+- ثبت درخواست شارژ کیف پول
+- آپلود رسید و کد پیگیری برای شارژ
+- تایید یا رد درخواست شارژ توسط مدیر
+- ثبت کامل تراکنش‌ها:
+  - شارژ
+  - پرداخت سفارش
+  - بازگشت وجه
+  - اصلاح دستی
+
+---
+
+### 🧾 فاکتور
+- صدور خودکار فاکتور برای سفارش‌های پرداخت‌شده
+- شماره فاکتور یکتا
+- مشاهده لیست فاکتورها توسط کاربر
+
+---
+
+### 🎫 سیستم تیکت پشتیبانی
+- ارسال تیکت توسط کاربران
+- پاسخ‌دهی و پیگیری مکالمه
+- نمایش تیکت‌ها در داشبورد کاربر
+
+---
+
+### 📊 داشبورد کاربری
+- مشاهده دوره‌های ثبت‌نام‌شده
+- لیست سفارش‌ها
+- وضعیت کیف پول
+- تراکنش‌ها
+- تیکت‌های پشتیبانی
+
+---
+
+### ⚙️ تنظیمات سایت و مدیریت
+- تغییر **مسیر پنل مدیریت** برای افزایش امنیت
+- تنظیم نام برند، لوگو و فاوآیکن
+- تنظیم تم پیش‌فرض (روشن / تیره / سیستم)
+- مدیریت منوهای هدر و فوتر
+- مدیریت متن‌های قالب
+- مدیریت فیلدهای ثبت‌نام کاربران
+- تغییر نام کاربری و رمز عبور ادمین از داخل پنل
+
+---
+
+## 🧠 معماری و تکنولوژی
 
 - Python 3.12
 - Django 5
 - MySQL 8
 - Docker & Docker Compose
-- Nginx
+- Nginx (Reverse Proxy)
 - Gunicorn
-- Let’s Encrypt (SSL)
+- Let’s Encrypt (SSL خودکار)
+- تنظیمات کامل HTTPS و CSRF
+- پشتیبانی از locale فارسی (fa_IR)
 
 ---
 
-## 🚀 Quick Install
+## 🚀 نصب سریع
+
+> نصب پروژه به‌صورت **کاملاً خودکار و تعاملی** انجام می‌شود.
+
+### پیش‌نیازها
+- Ubuntu Server
+- دامنه متصل به سرور
+- دسترسی `root` یا `sudo`
+
+### نصب با یک دستور
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/admin6501/EduCMS/refs/heads/main/install.sh)
 ```
 
+در زمان نصب، اطلاعات زیر از شما دریافت می‌شود:
+- دامنه سایت
+- ایمیل برای SSL
+- مسیر پنل ادمین
+- نام دیتابیس
+- نام کاربری و رمز دیتابیس
+- نام کاربری و رمز عبور ادمین
+
 ---
 
-## 🌐 After Installation
+## 🌐 بعد از نصب
 
-Website:
+- آدرس سایت:
 ```
 https://your-domain.com
 ```
 
-Admin panel:
+- پنل مدیریت:
 ```
 https://your-domain.com/ADMIN_PATH/
 ```
 
----
-
-## 🔐 Security Notes
-
-- Custom admin path enforcement
-- Hashed security answers
-- HTTPS-only cookies
-- CSRF & proxy security headers
+(مسیر ادمین قابل تغییر است و الزاماً `/admin/` نیست)
 
 ---
 
-## 📄 License
+## 🗂 ساختار پروژه
 
-MIT License
+```
+/opt/educms
+├── app/                # پروژه Django
+├── nginx/              # تنظیمات Nginx
+├── certbot/            # فایل‌های SSL
+├── docker-compose.yml
+├── .env
+└── backups/
+```
+
+---
+
+## ⚙️ مدیریت و نگهداری
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose restart
+docker compose down
+docker compose up -d --build
+```
+
+---
+
+## 🔐 نکات امنیتی
+
+- مسیر پنل ادمین قابل تغییر و مخفی‌سازی شده
+- ذخیره امن اطلاعات حساس در فایل `.env`
+- پاسخ سؤال امنیتی به‌صورت هش‌شده
+- کوکی‌ها فقط روی HTTPS معتبر هستند
+- تنظیم کامل CSRF و Proxy Headers
+
+---
+
+## 📄 لایسنس
+
+این پروژه تحت **MIT License** منتشر شده است.
+
+استفاده، تغییر، توزیع و تجاری‌سازی پروژه آزاد است،  
+به شرط حفظ متن لایسنس در نسخه‌های مشتق‌شده.
+
+---
+
+<div align="center">
+
+✨ ساخته شده برای پلتفرم‌های آموزشی واقعی و قابل توسعه ✨
+
+</div>
