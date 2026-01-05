@@ -6131,9 +6131,15 @@ do_install(){
   write_compose
   write_project
 
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   write_nginx_http
+  echo "Building and starting containers..."
   docker compose up -d --build db web nginx
+  
+  # Wait for services to be ready
+  echo "Waiting for services to initialize..."
+  sleep 10
+  
   issue_ssl
   write_nginx_https
   
@@ -6141,12 +6147,16 @@ do_install(){
   docker compose restart nginx
   ensure_cron
 
-  echo "DONE:"
+  echo ""
+  echo "============================================"
+  echo "✅ DONE - EduCMS installed successfully!"
+  echo "============================================"
   echo "Site: https://${DOMAIN}"
   echo "Dashboard: https://${DOMAIN}/dashboard/"
   echo "Admin: https://${DOMAIN}/${ADMIN_PATH}/"
   echo "Wallet: https://${DOMAIN}/wallet/"
   echo "Invoices: https://${DOMAIN}/invoices/"
+  echo "============================================"
 }
 
 
