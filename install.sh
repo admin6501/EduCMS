@@ -5747,6 +5747,153 @@ except Exception as e:
     print(f"Database schema fix error (may be ok): {e}")
 PYFIX
 
+echo "Creating Payment Gateway and IP Security tables..."
+python manage.py shell <<'PYPAY'
+import os
+import MySQLdb
+
+db_config = {
+    'host': os.getenv('DB_HOST', 'db'),
+    'user': os.getenv('DB_USER'),
+    'passwd': os.getenv('DB_PASSWORD'),
+    'db': os.getenv('DB_NAME'),
+    'port': int(os.getenv('DB_PORT', 3306))
+}
+
+def table_exists(cursor, table):
+    cursor.execute(f"SHOW TABLES LIKE '{table}'")
+    return cursor.fetchone() is not None
+
+def column_exists(cursor, table, column):
+    cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+    return cursor.fetchone() is not None
+
+def safe_exec(cursor, sql, msg=None):
+    try:
+        cursor.execute(sql)
+        if msg:
+            print(msg)
+        return True
+    except Exception as e:
+        if msg:
+            print(f"{msg} (skipped): {e}")
+        return False
+
+try:
+    conn = MySQLdb.connect(**db_config)
+    cursor = conn.cursor()
+
+    # ===== PAYMENT GATEWAY =====
+    if not table_exists(cursor, 'payments_paymentgateway'):
+        safe_exec(cursor, '''
+            CREATE TABLE payments_paymentgateway (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                gateway_type VARCHAR(20) NOT NULL UNIQUE,
+                merchant_id VARCHAR(100) NOT NULL,
+                is_active TINYINT(1) NOT NULL DEFAULT 0,
+                is_sandbox TINYINT(1) NOT NULL DEFAULT 0,
+                priority INT UNSIGNED NOT NULL DEFAULT 0,
+                description VARCHAR(200) DEFAULT '',
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created payments_paymentgateway table")
+
+    # ===== ONLINE PAYMENT =====
+    if not table_exists(cursor, 'payments_onlinepayment'):
+        safe_exec(cursor, '''
+            CREATE TABLE payments_onlinepayment (
+                id CHAR(36) PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                gateway_id BIGINT NOT NULL,
+                payment_type VARCHAR(10) NOT NULL,
+                amount INT UNSIGNED NOT NULL,
+                order_id CHAR(36) NULL,
+                authority VARCHAR(100) DEFAULT '',
+                ref_id VARCHAR(100) DEFAULT '',
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                gateway_response JSON DEFAULT NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                paid_at DATETIME(6) NULL,
+                KEY payments_onlinepayment_user_id (user_id),
+                KEY payments_onlinepayment_gateway_id (gateway_id),
+                KEY payments_onlinepayment_order_id (order_id),
+                KEY payments_onlinepayment_authority (authority),
+                CONSTRAINT fk_onlinepayment_user FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE,
+                CONSTRAINT fk_onlinepayment_gateway FOREIGN KEY (gateway_id) REFERENCES payments_paymentgateway(id) ON DELETE RESTRICT
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created payments_onlinepayment table")
+
+    # ===== IP SECURITY SETTING =====
+    if not table_exists(cursor, 'settingsapp_ipsecuritysetting'):
+        safe_exec(cursor, '''
+            CREATE TABLE settingsapp_ipsecuritysetting (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+                max_attempts INT UNSIGNED NOT NULL DEFAULT 5,
+                block_duration_type VARCHAR(10) NOT NULL DEFAULT 'minutes',
+                block_duration_value INT UNSIGNED NOT NULL DEFAULT 30,
+                reset_attempts_after INT UNSIGNED NOT NULL DEFAULT 60,
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created settingsapp_ipsecuritysetting table")
+        # Insert default setting
+        safe_exec(cursor, '''
+            INSERT INTO settingsapp_ipsecuritysetting (id, is_enabled, max_attempts, block_duration_type, block_duration_value, reset_attempts_after)
+            VALUES (1, 1, 5, 'minutes', 30, 60)
+        ''', "Inserted default IP security settings")
+
+    # ===== IP WHITELIST =====
+    if not table_exists(cursor, 'settingsapp_ipwhitelist'):
+        safe_exec(cursor, '''
+            CREATE TABLE settingsapp_ipwhitelist (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(39) NOT NULL UNIQUE,
+                description VARCHAR(200) DEFAULT '',
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created settingsapp_ipwhitelist table")
+
+    # ===== IP BLACKLIST =====
+    if not table_exists(cursor, 'settingsapp_ipblacklist'):
+        safe_exec(cursor, '''
+            CREATE TABLE settingsapp_ipblacklist (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(39) NOT NULL,
+                block_type VARCHAR(10) NOT NULL DEFAULT 'auto',
+                reason VARCHAR(300) DEFAULT '',
+                is_permanent TINYINT(1) NOT NULL DEFAULT 0,
+                blocked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                expires_at DATETIME(6) NULL,
+                failed_attempts INT UNSIGNED NOT NULL DEFAULT 0,
+                KEY settingsapp_ipblacklist_ip (ip_address),
+                KEY settingsapp_ipblacklist_expires (expires_at)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created settingsapp_ipblacklist table")
+
+    # ===== LOGIN ATTEMPT =====
+    if not table_exists(cursor, 'settingsapp_loginattempt'):
+        safe_exec(cursor, '''
+            CREATE TABLE settingsapp_loginattempt (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(39) NOT NULL,
+                username VARCHAR(150) DEFAULT '',
+                is_successful TINYINT(1) NOT NULL DEFAULT 0,
+                user_agent TEXT,
+                attempted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                KEY settingsapp_loginattempt_ip (ip_address),
+                KEY settingsapp_loginattempt_at (attempted_at)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+        ''', "Created settingsapp_loginattempt table")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Payment Gateway and IP Security tables created successfully.")
+except Exception as e:
+    print(f"Payment/IP Security tables error (may be ok): {e}")
+PYPAY
+
 echo "Seeding database..."
 python manage.py shell <<'PY'
 import os
