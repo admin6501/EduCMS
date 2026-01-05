@@ -2129,9 +2129,10 @@ class AdminAliasMiddleware(MiddlewareMixin):
     admin_path=(_get_admin_path() or "admin").strip().strip("/") or "admin"
     ap=admin_path.lower()
     p=(request.path or "/"); pl=p.lower()
-    if ap!="admin" and pl.startswith("/admin"):
+    # Block access to default /admin/ only if custom admin path is set
+    if ap!="admin" and (pl.startswith("/admin/") or pl == "/admin"):
       return HttpResponseNotFound("Not Found")
-    if pl==f"/{ap}":
+    if pl==f"/{ap}" or pl==f"/{ap}/":
       request.path_info="/admin/"; return None
     pref=f"/{ap}/"
     if pl.startswith(pref):
@@ -2146,7 +2147,8 @@ class IPSecurityMiddleware(MiddlewareMixin):
     admin_path = _get_admin_path()
     path = request.path.lower()
     
-    if not (path.startswith('/admin') or path.startswith(f'/{admin_path}')):
+    # Check for exact admin paths
+    if not (path.startswith('/admin/') or path == '/admin' or path.startswith(f'/{admin_path}/') or path == f'/{admin_path}'):
       return None
     
     try:
