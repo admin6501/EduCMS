@@ -2561,11 +2561,18 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages
 from django.utils import timezone
 from django.db import transaction
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from courses.models import Course, PublishStatus, Enrollment
 from courses.access import user_has_course_access
-from .models import BankTransferSetting, Order, OrderStatus, Wallet, WalletTopUpRequest, TopUpStatus, wallet_apply, Invoice
+from .models import (BankTransferSetting, Order, OrderStatus, Wallet, WalletTopUpRequest, 
+                     TopUpStatus, wallet_apply, Invoice, PaymentGateway, GatewayType, 
+                     OnlinePayment, OnlinePaymentStatus, OnlinePaymentType)
 from .forms import ReceiptUploadForm, CouponApplyForm, WalletTopUpForm
-from .utils import validate_coupon, calc_coupon_discount
+from .utils import (validate_coupon, calc_coupon_discount, get_active_gateways,
+                    zarinpal_request, zarinpal_redirect_url, zarinpal_verify,
+                    zibal_request, zibal_redirect_url, zibal_verify,
+                    idpay_request, idpay_redirect_url, idpay_verify)
 
 def ensure_invoice(order:Order):
   if hasattr(order,"invoice"): return order.invoice
@@ -2615,6 +2622,9 @@ def checkout(request, slug):
   order.save(update_fields=["coupon","discount_amount","final_amount"])
 
   wallet,_ = Wallet.objects.get_or_create(user=request.user)
+  
+  # دریافت درگاه‌های فعال
+  active_gateways = get_active_gateways()
 
   if request.method=="POST" and "pay_wallet" in request.POST:
     if wallet.balance < final:
@@ -2635,6 +2645,7 @@ def checkout(request, slug):
   return render(request,"orders/checkout.html",{
     "course":course,"setting":setting,"order":order,"coupon_form":coupon_form,
     "discount_label":label,"first_purchase_eligible":first_paid,"wallet":wallet,
+    "active_gateways":active_gateways,
   })
 
 @login_required
