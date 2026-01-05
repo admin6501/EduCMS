@@ -3154,9 +3154,12 @@ PY
   cat > app/payments/admin.py <<'PY'
 from django.contrib import admin
 from django.utils import timezone
+from django.utils.html import format_html
 from django.db import transaction
 from courses.models import Enrollment
-from .models import BankTransferSetting, Order, OrderStatus, Coupon, Wallet, WalletTransaction, WalletTopUpRequest, TopUpStatus, wallet_apply, Invoice
+from .models import (BankTransferSetting, Order, OrderStatus, Coupon, Wallet, WalletTransaction, 
+                     WalletTopUpRequest, TopUpStatus, wallet_apply, Invoice, PaymentGateway, 
+                     GatewayType, OnlinePayment, OnlinePaymentStatus)
 from settingsapp.date_utils import smart_format_datetime
 
 def ensure_invoice(order):
@@ -3219,6 +3222,104 @@ class WalletTopUpRequestAdmin(admin.ModelAdmin):
   def created_at_display(self, obj):
       return smart_format_datetime(obj.created_at)
   created_at_display.short_description = "تاریخ ثبت"
+  created_at_display.admin_order_field = "created_at"
+
+# ==================== PAYMENT GATEWAY ADMIN ====================
+
+@admin.register(PaymentGateway)
+class PaymentGatewayAdmin(admin.ModelAdmin):
+  list_display = ("gateway_type_display", "merchant_preview", "is_active_display", "is_sandbox_display", "priority", "updated_at_display")
+  list_filter = ("is_active", "is_sandbox", "gateway_type")
+  list_editable = ("priority",)
+  search_fields = ("merchant_id", "description")
+  ordering = ("priority", "gateway_type")
+  
+  fieldsets = (
+    ("نوع درگاه", {
+      "fields": ("gateway_type",),
+      "description": "نوع درگاه پرداخت را انتخاب کنید. هر درگاه فقط یکبار قابل اضافه شدن است."
+    }),
+    ("تنظیمات اتصال", {
+      "fields": ("merchant_id", "is_sandbox"),
+      "description": "مرچنت کد (یا API Key) درگاه را وارد کنید. حالت تست برای آزمایش بدون پرداخت واقعی است."
+    }),
+    ("وضعیت", {
+      "fields": ("is_active", "priority", "description"),
+      "description": "درگاه‌های فعال به کاربران نمایش داده می‌شوند. اولویت کمتر = نمایش بالاتر"
+    }),
+  )
+  
+  def gateway_type_display(self, obj):
+    icons = {
+      "zarinpal": "💛",
+      "zibal": "💙", 
+      "idpay": "💚",
+    }
+    icon = icons.get(obj.gateway_type, "💳")
+    return f"{icon} {obj.get_gateway_type_display()}"
+  gateway_type_display.short_description = "درگاه"
+  gateway_type_display.admin_order_field = "gateway_type"
+  
+  def merchant_preview(self, obj):
+    if obj.merchant_id:
+      preview = obj.merchant_id[:8] + "..." if len(obj.merchant_id) > 12 else obj.merchant_id
+      return format_html('<code dir="ltr">{}</code>', preview)
+    return "-"
+  merchant_preview.short_description = "مرچنت کد"
+  
+  def is_active_display(self, obj):
+    if obj.is_active:
+      return format_html('<span style="color:green;">✅ فعال</span>')
+    return format_html('<span style="color:gray;">⬜ غیرفعال</span>')
+  is_active_display.short_description = "وضعیت"
+  is_active_display.admin_order_field = "is_active"
+  
+  def is_sandbox_display(self, obj):
+    if obj.is_sandbox:
+      return format_html('<span style="color:orange;">🔶 تست</span>')
+    return format_html('<span style="color:blue;">🔷 واقعی</span>')
+  is_sandbox_display.short_description = "محیط"
+  is_sandbox_display.admin_order_field = "is_sandbox"
+  
+  def updated_at_display(self, obj):
+    return smart_format_datetime(obj.updated_at)
+  updated_at_display.short_description = "آخرین تغییر"
+  updated_at_display.admin_order_field = "updated_at"
+
+@admin.register(OnlinePayment)
+class OnlinePaymentAdmin(admin.ModelAdmin):
+  list_display = ("id_short", "user", "gateway", "payment_type", "amount", "status_display", "ref_id", "created_at_display")
+  list_filter = ("status", "payment_type", "gateway__gateway_type", "created_at")
+  search_fields = ("user__username", "user__email", "authority", "ref_id")
+  readonly_fields = ("id", "user", "gateway", "payment_type", "amount", "order", "authority", "ref_id", "gateway_response", "created_at", "paid_at")
+  ordering = ("-created_at",)
+  
+  def id_short(self, obj):
+    return str(obj.id)[:8] + "..."
+  id_short.short_description = "شناسه"
+  
+  def status_display(self, obj):
+    colors = {
+      "pending": "orange",
+      "success": "green",
+      "failed": "red",
+      "canceled": "gray",
+    }
+    icons = {
+      "pending": "⏳",
+      "success": "✅",
+      "failed": "❌",
+      "canceled": "🚫",
+    }
+    color = colors.get(obj.status, "gray")
+    icon = icons.get(obj.status, "")
+    return format_html('<span style="color:{};">{} {}</span>', color, icon, obj.get_status_display())
+  status_display.short_description = "وضعیت"
+  status_display.admin_order_field = "status"
+  
+  def created_at_display(self, obj):
+    return smart_format_datetime(obj.created_at)
+  created_at_display.short_description = "تاریخ ایجاد"
   created_at_display.admin_order_field = "created_at"
 
 admin.site.register(BankTransferSetting)
