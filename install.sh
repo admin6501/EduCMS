@@ -2706,10 +2706,295 @@ def invoice_detail(request, order_id):
   inv=get_object_or_404(Invoice, order__id=order_id, order__user=request.user)
   return render(request,"invoices/detail.html",{"invoice":inv})
 
+# ==================== ONLINE PAYMENT VIEWS ====================
+
+@login_required
+def pay_online_order(request, order_id, gateway_type):
+  """شروع پرداخت آنلاین برای سفارش"""
+  order = get_object_or_404(Order, id=order_id, user=request.user)
+  if order.status in [OrderStatus.PAID, OrderStatus.CANCELED]:
+    messages.error(request, "این سفارش قابل پرداخت نیست.")
+    return redirect("orders_my")
+  
+  try:
+    gateway = PaymentGateway.objects.get(gateway_type=gateway_type, is_active=True)
+  except PaymentGateway.DoesNotExist:
+    messages.error(request, "درگاه پرداخت یافت نشد یا غیرفعال است.")
+    return redirect("checkout", slug=order.course.slug)
+  
+  amount = order.final_amount
+  callback_url = request.build_absolute_uri(f"/orders/callback/{gateway_type}/")
+  description = f"خرید دوره: {order.course.title}"
+  
+  # ایجاد رکورد پرداخت آنلاین
+  online_payment = OnlinePayment.objects.create(
+    user=request.user,
+    gateway=gateway,
+    payment_type=OnlinePaymentType.ORDER,
+    amount=amount,
+    order=order,
+  )
+  
+  success = False
+  authority = ""
+  redirect_url = ""
+  
+  if gateway_type == GatewayType.ZARINPAL:
+    success, authority, resp = zarinpal_request(gateway, amount, callback_url, description, request.user.email)
+    if success:
+      redirect_url = zarinpal_redirect_url(gateway, authority)
+  elif gateway_type == GatewayType.ZIBAL:
+    success, authority, resp = zibal_request(gateway, amount, callback_url, description)
+    if success:
+      redirect_url = zibal_redirect_url(gateway, authority)
+  elif gateway_type == GatewayType.IDPAY:
+    success, authority, resp = idpay_request(gateway, amount, callback_url, description, str(online_payment.id), 
+                                              request.user.get_full_name(), request.user.email)
+    if success:
+      redirect_url = resp.get("link", "")
+  
+  if success:
+    online_payment.authority = authority
+    online_payment.gateway_response = resp
+    online_payment.save()
+    return redirect(redirect_url)
+  else:
+    online_payment.status = OnlinePaymentStatus.FAILED
+    online_payment.gateway_response = {"error": authority}
+    online_payment.save()
+    messages.error(request, f"خطا در اتصال به درگاه: {authority}")
+    return redirect("checkout", slug=order.course.slug)
+
+@login_required
+def pay_online_wallet(request, gateway_type):
+  """شروع پرداخت آنلاین برای شارژ کیف پول"""
+  amount = request.GET.get("amount") or request.POST.get("amount")
+  if not amount:
+    messages.error(request, "مبلغ مشخص نشده است.")
+    return redirect("wallet_topup")
+  
+  try:
+    amount = int(amount)
+    if amount < 1000:
+      messages.error(request, "حداقل مبلغ شارژ ۱۰۰۰ تومان است.")
+      return redirect("wallet_topup")
+  except:
+    messages.error(request, "مبلغ نامعتبر است.")
+    return redirect("wallet_topup")
+  
+  try:
+    gateway = PaymentGateway.objects.get(gateway_type=gateway_type, is_active=True)
+  except PaymentGateway.DoesNotExist:
+    messages.error(request, "درگاه پرداخت یافت نشد یا غیرفعال است.")
+    return redirect("wallet_topup")
+  
+  callback_url = request.build_absolute_uri(f"/wallet/callback/{gateway_type}/")
+  description = f"شارژ کیف پول - {request.user.email}"
+  
+  # ایجاد رکورد پرداخت آنلاین
+  online_payment = OnlinePayment.objects.create(
+    user=request.user,
+    gateway=gateway,
+    payment_type=OnlinePaymentType.WALLET,
+    amount=amount,
+  )
+  
+  success = False
+  authority = ""
+  redirect_url = ""
+  
+  if gateway_type == GatewayType.ZARINPAL:
+    success, authority, resp = zarinpal_request(gateway, amount, callback_url, description, request.user.email)
+    if success:
+      redirect_url = zarinpal_redirect_url(gateway, authority)
+  elif gateway_type == GatewayType.ZIBAL:
+    success, authority, resp = zibal_request(gateway, amount, callback_url, description)
+    if success:
+      redirect_url = zibal_redirect_url(gateway, authority)
+  elif gateway_type == GatewayType.IDPAY:
+    success, authority, resp = idpay_request(gateway, amount, callback_url, description, str(online_payment.id),
+                                              request.user.get_full_name(), request.user.email)
+    if success:
+      redirect_url = resp.get("link", "")
+  
+  if success:
+    online_payment.authority = authority
+    online_payment.gateway_response = resp
+    online_payment.save()
+    return redirect(redirect_url)
+  else:
+    online_payment.status = OnlinePaymentStatus.FAILED
+    online_payment.gateway_response = {"error": authority}
+    online_payment.save()
+    messages.error(request, f"خطا در اتصال به درگاه: {authority}")
+    return redirect("wallet_topup")
+
+@csrf_exempt
+def payment_callback_order(request, gateway_type):
+  """کال‌بک پرداخت سفارش"""
+  if gateway_type == GatewayType.ZARINPAL:
+    authority = request.GET.get("Authority", "")
+    status = request.GET.get("Status", "")
+    
+    if status != "OK":
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("orders_my")
+    
+    try:
+      payment = OnlinePayment.objects.get(authority=authority, payment_type=OnlinePaymentType.ORDER)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("orders_my")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = zarinpal_verify(gateway, authority, payment.amount)
+    
+  elif gateway_type == GatewayType.ZIBAL:
+    track_id = request.GET.get("trackId", "")
+    success_param = request.GET.get("success", "0")
+    
+    if success_param != "1":
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("orders_my")
+    
+    try:
+      payment = OnlinePayment.objects.get(authority=track_id, payment_type=OnlinePaymentType.ORDER)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("orders_my")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = zibal_verify(gateway, track_id)
+    
+  elif gateway_type == GatewayType.IDPAY:
+    payment_id = request.POST.get("id") or request.GET.get("id", "")
+    order_id = request.POST.get("order_id") or request.GET.get("order_id", "")
+    status = request.POST.get("status") or request.GET.get("status", "")
+    
+    if str(status) not in ["100", "101", "200"]:
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("orders_my")
+    
+    try:
+      payment = OnlinePayment.objects.get(id=order_id, payment_type=OnlinePaymentType.ORDER)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("orders_my")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = idpay_verify(gateway, payment_id, order_id)
+  else:
+    messages.error(request, "درگاه نامعتبر.")
+    return redirect("orders_my")
+  
+  payment.gateway_response = resp
+  
+  if success:
+    payment.status = OnlinePaymentStatus.SUCCESS
+    payment.ref_id = ref_id
+    payment.paid_at = timezone.now()
+    payment.save()
+    
+    # تکمیل سفارش
+    order = payment.order
+    if order and order.status != OrderStatus.PAID:
+      with transaction.atomic():
+        order.status = OrderStatus.PAID
+        order.verified_at = timezone.now()
+        order.tracking_code = ref_id
+        order.save()
+        Enrollment.objects.get_or_create(user=order.user, course=order.course, defaults={"is_active":True,"source":"online"})
+        ensure_invoice(order)
+      messages.success(request, f"پرداخت موفق! کد پیگیری: {ref_id}")
+      return redirect("invoice_detail", order_id=order.id)
+    else:
+      messages.info(request, "این سفارش قبلا پرداخت شده بود.")
+      return redirect("orders_my")
+  else:
+    payment.status = OnlinePaymentStatus.FAILED
+    payment.save()
+    messages.error(request, f"پرداخت ناموفق: {ref_id}")
+    return redirect("orders_my")
+
+@csrf_exempt
+def payment_callback_wallet(request, gateway_type):
+  """کال‌بک پرداخت شارژ کیف پول"""
+  if gateway_type == GatewayType.ZARINPAL:
+    authority = request.GET.get("Authority", "")
+    status = request.GET.get("Status", "")
+    
+    if status != "OK":
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("wallet_home")
+    
+    try:
+      payment = OnlinePayment.objects.get(authority=authority, payment_type=OnlinePaymentType.WALLET)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("wallet_home")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = zarinpal_verify(gateway, authority, payment.amount)
+    
+  elif gateway_type == GatewayType.ZIBAL:
+    track_id = request.GET.get("trackId", "")
+    success_param = request.GET.get("success", "0")
+    
+    if success_param != "1":
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("wallet_home")
+    
+    try:
+      payment = OnlinePayment.objects.get(authority=track_id, payment_type=OnlinePaymentType.WALLET)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("wallet_home")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = zibal_verify(gateway, track_id)
+    
+  elif gateway_type == GatewayType.IDPAY:
+    payment_id = request.POST.get("id") or request.GET.get("id", "")
+    order_id = request.POST.get("order_id") or request.GET.get("order_id", "")
+    status = request.POST.get("status") or request.GET.get("status", "")
+    
+    if str(status) not in ["100", "101", "200"]:
+      messages.error(request, "پرداخت لغو شد یا ناموفق بود.")
+      return redirect("wallet_home")
+    
+    try:
+      payment = OnlinePayment.objects.get(id=order_id, payment_type=OnlinePaymentType.WALLET)
+    except OnlinePayment.DoesNotExist:
+      messages.error(request, "تراکنش یافت نشد.")
+      return redirect("wallet_home")
+    
+    gateway = payment.gateway
+    success, ref_id, resp = idpay_verify(gateway, payment_id, order_id)
+  else:
+    messages.error(request, "درگاه نامعتبر.")
+    return redirect("wallet_home")
+  
+  payment.gateway_response = resp
+  
+  if success:
+    payment.status = OnlinePaymentStatus.SUCCESS
+    payment.ref_id = ref_id
+    payment.paid_at = timezone.now()
+    payment.save()
+    
+    # شارژ کیف پول
+    wallet_apply(payment.user, payment.amount, kind="topup", description=f"شارژ آنلاین - کد: {ref_id}")
+    messages.success(request, f"کیف پول شارژ شد! کد پیگیری: {ref_id}")
+    return redirect("wallet_home")
+  else:
+    payment.status = OnlinePaymentStatus.FAILED
+    payment.save()
+    messages.error(request, f"پرداخت ناموفق: {ref_id}")
+    return redirect("wallet_home")
+
 @login_required
 def invoice_pdf(request, order_id):
   """تولید PDF فاکتور"""
-  from django.http import HttpResponse
   from reportlab.lib.pagesizes import A4
   from reportlab.lib.units import cm
   from reportlab.lib.colors import HexColor
