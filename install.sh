@@ -6319,7 +6319,7 @@ restore_db(){
   require_root; require_tty
   [[ -f "$ENV_FILE" ]] || die ".env not found"
   set -a; . "$ENV_FILE"; set +a
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   local sql_file="${1:-}"
   [[ -n "$sql_file" && -f "$sql_file" ]] || die "Provide existing .sql path."
 
@@ -6327,11 +6327,20 @@ restore_db(){
   read -r -p "Type YES to continue: " ans </dev/tty || true
   [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
 
-  docker compose up -d db >/dev/null
-  docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot -e 'DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
-  docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot \"${DB_NAME}\"" < "${sql_file}"
-  docker compose up -d web nginx >/dev/null || true
-  echo "Restore completed."
+  echo "Starting database container..."
+  docker compose up -d db >/dev/null 2>&1 || true
+  sleep 3
+  echo "Dropping and recreating database..."
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot -e 'DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"; then
+    die "Failed to recreate database"
+  fi
+  echo "Restoring from backup..."
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot \"${DB_NAME}\"" < "${sql_file}"; then
+    die "Restore failed"
+  fi
+  echo "Starting web and nginx containers..."
+  docker compose up -d web nginx >/dev/null 2>&1 || true
+  echo "✅ Restore completed successfully."
 }
 
 change_domain(){
