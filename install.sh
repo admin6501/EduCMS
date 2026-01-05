@@ -6067,9 +6067,9 @@ CRON
 }
 
 debug_django(){
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   echo "Running Django checks + template compile scan..."
-  docker compose exec -T web python manage.py check
+  docker compose exec -T web python manage.py check || echo "Warning: Django check failed, continuing..."
 
   docker compose exec -T web bash -lc "python - <<'PY'
 import os, sys
