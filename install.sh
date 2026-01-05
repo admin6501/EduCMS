@@ -5822,6 +5822,10 @@ try:
                 KEY idx_onlinepayment_authority (authority)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created payments_onlinepayment table")
+    else:
+        # Fix user_id column type if wrong
+        safe_exec(cursor, "ALTER TABLE payments_onlinepayment MODIFY COLUMN user_id INT NOT NULL", "Fixed user_id column type")
+        safe_exec(cursor, "ALTER TABLE payments_onlinepayment MODIFY COLUMN gateway_id BIGINT NOT NULL", "Fixed gateway_id column type")
     conn.commit()
 
     # ===== IP SECURITY SETTING =====
