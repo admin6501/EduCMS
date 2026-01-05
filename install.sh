@@ -6361,6 +6361,12 @@ change_domain(){
   new_domain="$(read_line "دامنه جدید (مثال: newdomain.com): ")"
   validate_domain "$new_domain" || die "دامنه نامعتبر است"
   
+  # Check if new domain is same as old domain
+  if [[ "$new_domain" == "$old_domain" ]]; then
+    echo "دامنه جدید با دامنه فعلی یکسان است. تغییری اعمال نشد."
+    return 0
+  fi
+  
   new_email="$(read_line "ایمیل برای Let's Encrypt [${LE_EMAIL}]: ")"
   [[ -z "$new_email" ]] && new_email="$LE_EMAIL"
   validate_email "$new_email" || die "ایمیل نامعتبر است"
@@ -6371,7 +6377,7 @@ change_domain(){
   read -r -p "برای ادامه YES تایپ کنید: " ans </dev/tty || true
   [[ "${ans:-}" == "YES" ]] || { echo "لغو شد."; return 0; }
   
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   
   # Stop web container first
   echo "توقف سرویس‌ها..."
@@ -6394,7 +6400,8 @@ change_domain(){
   
   # Start nginx for SSL challenge
   docker compose up -d nginx
-  sleep 2
+  echo "Waiting for nginx to start..."
+  sleep 5
   
   # Get new SSL certificate
   echo "دریافت گواهی SSL برای دامنه جدید..."
