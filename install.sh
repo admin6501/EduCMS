@@ -6151,7 +6151,112 @@ do_patch(){
   write_compose
   write_project
   cd "$APP_DIR"
+  
+  # Load env vars
+  set -a; . "$ENV_FILE"; set +a
+  
   docker compose up -d --build db web nginx
+  
+  # Wait for DB to be ready
+  echo "Waiting for database..."
+  sleep 5
+  
+  # Fix database tables for new features
+  echo "Fixing database tables..."
+  docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot "${DB_NAME}" <<'SQLFIX'
+-- Drop and recreate payments_onlinepayment with correct schema
+DROP TABLE IF EXISTS payments_onlinepayment;
+CREATE TABLE payments_onlinepayment (
+    id CHAR(36) PRIMARY KEY,
+    user_id INT NOT NULL,
+    gateway_id BIGINT NOT NULL,
+    payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
+    amount INT UNSIGNED NOT NULL DEFAULT 0,
+    order_id CHAR(36) NULL,
+    authority VARCHAR(100) DEFAULT '',
+    ref_id VARCHAR(100) DEFAULT '',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    gateway_response JSON DEFAULT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    paid_at DATETIME(6) NULL,
+    KEY idx_user (user_id),
+    KEY idx_gateway (gateway_id),
+    KEY idx_order (order_id),
+    KEY idx_authority (authority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create payments_paymentgateway if not exists
+CREATE TABLE IF NOT EXISTS payments_paymentgateway (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    gateway_type VARCHAR(20) NOT NULL UNIQUE,
+    merchant_id VARCHAR(100) NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 0,
+    is_sandbox TINYINT(1) NOT NULL DEFAULT 0,
+    priority INT UNSIGNED NOT NULL DEFAULT 0,
+    description VARCHAR(200) DEFAULT '',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create settingsapp_ipsecuritysetting if not exists
+CREATE TABLE IF NOT EXISTS settingsapp_ipsecuritysetting (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+    max_attempts INT UNSIGNED NOT NULL DEFAULT 5,
+    block_duration_type VARCHAR(10) NOT NULL DEFAULT 'minutes',
+    block_duration_value INT UNSIGNED NOT NULL DEFAULT 30,
+    reset_attempts_after INT UNSIGNED NOT NULL DEFAULT 60,
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Insert default IP security settings if empty
+INSERT IGNORE INTO settingsapp_ipsecuritysetting (id, is_enabled, max_attempts, block_duration_type, block_duration_value, reset_attempts_after)
+VALUES (1, 1, 5, 'minutes', 30, 60);
+
+-- Create settingsapp_ipwhitelist if not exists
+CREATE TABLE IF NOT EXISTS settingsapp_ipwhitelist (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(39) NOT NULL UNIQUE,
+    description VARCHAR(200) DEFAULT '',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create settingsapp_ipblacklist if not exists
+CREATE TABLE IF NOT EXISTS settingsapp_ipblacklist (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(39) NOT NULL,
+    block_type VARCHAR(10) NOT NULL DEFAULT 'auto',
+    reason VARCHAR(300) DEFAULT '',
+    is_permanent TINYINT(1) NOT NULL DEFAULT 0,
+    blocked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    expires_at DATETIME(6) NULL,
+    failed_attempts INT UNSIGNED NOT NULL DEFAULT 0,
+    KEY idx_ip (ip_address),
+    KEY idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Create settingsapp_loginattempt if not exists
+CREATE TABLE IF NOT EXISTS settingsapp_loginattempt (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    ip_address VARCHAR(39) NOT NULL,
+    username VARCHAR(150) DEFAULT '',
+    is_successful TINYINT(1) NOT NULL DEFAULT 0,
+    user_agent TEXT,
+    attempted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    KEY idx_ip (ip_address),
+    KEY idx_at (attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add sheba column to BankTransferSetting if not exists
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payments_banktransfersetting' AND COLUMN_NAME='sheba');
+SET @sql = IF(@col_exists = 0, 'ALTER TABLE payments_banktransfersetting ADD COLUMN sheba VARCHAR(30) DEFAULT ""', 'SELECT 1');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SQLFIX
+
+  echo "Database tables fixed."
+  
   if ! docker compose ps web | grep -q "Up"; then
     docker compose logs --tail=200 web || true
     die "web is not running"
