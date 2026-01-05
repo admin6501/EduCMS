@@ -2680,11 +2680,12 @@ from django.utils.translation import gettext_lazy as _
 from courses.models import Course
 
 class BankTransferSetting(models.Model):
-  account_holder=models.CharField(max_length=120, blank=True)
-  card_number=models.CharField(max_length=30, blank=True)
-  note=models.TextField(blank=True)
-  first_purchase_percent=models.PositiveIntegerField(default=0)
-  first_purchase_amount=models.PositiveIntegerField(default=0)
+  account_holder=models.CharField(max_length=120, blank=True, verbose_name=_("نام صاحب حساب"))
+  card_number=models.CharField(max_length=30, blank=True, verbose_name=_("شماره کارت"))
+  sheba=models.CharField(max_length=30, blank=True, verbose_name=_("شماره شبا"))
+  note=models.TextField(blank=True, verbose_name=_("توضیحات"))
+  first_purchase_percent=models.PositiveIntegerField(default=0, verbose_name=_("درصد تخفیف خرید اول"))
+  first_purchase_amount=models.PositiveIntegerField(default=0, verbose_name=_("مبلغ تخفیف خرید اول"))
   updated_at=models.DateTimeField(auto_now=True)
   class Meta:
     verbose_name=_("تنظیمات کارت‌به‌کارت"); verbose_name_plural=_("تنظیمات کارت‌به‌کارت")
