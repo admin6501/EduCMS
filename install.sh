@@ -5802,15 +5802,15 @@ try:
     conn.commit()
 
     # ===== ONLINE PAYMENT =====
-    # First check if table has wrong column type and drop it
+    # Check if table exists with wrong schema and drop it
     if table_exists(cursor, 'payments_onlinepayment'):
         cursor.execute("SHOW COLUMNS FROM payments_onlinepayment LIKE 'user_id'")
         row = cursor.fetchone()
         if row:
             col_type = (row[1] or '').lower()
-            # If user_id is BIGINT or wrong type, drop table and recreate
-            if 'bigint' in col_type or 'null' in str(row[2]).lower():
-                print("Dropping payments_onlinepayment table (wrong column type)...")
+            # If user_id is NOT BIGINT, drop and recreate
+            if 'bigint' not in col_type:
+                print("Dropping payments_onlinepayment table (wrong user_id type, should be BIGINT)...")
                 safe_exec(cursor, "DROP TABLE payments_onlinepayment", "Dropped payments_onlinepayment")
                 conn.commit()
     
