@@ -256,6 +256,7 @@ reportlab>=4.0
 arabic-reshaper>=3.0
 python-bidi>=0.4
 pytz>=2024.1
+requests>=2.31
 REQ
 
   cat > app/manage.py <<'PY'
