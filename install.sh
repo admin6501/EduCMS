@@ -5805,8 +5805,8 @@ try:
         safe_exec(cursor, '''
             CREATE TABLE payments_onlinepayment (
                 id CHAR(36) PRIMARY KEY,
-                user_id BIGINT NULL,
-                gateway_id BIGINT NULL,
+                user_id INT NOT NULL,
+                gateway_id BIGINT NOT NULL,
                 payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
                 amount INT UNSIGNED NOT NULL DEFAULT 0,
                 order_id CHAR(36) NULL,
