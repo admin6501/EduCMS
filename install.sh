@@ -6302,7 +6302,7 @@ do_patch(){
 DROP TABLE IF EXISTS payments_onlinepayment;
 CREATE TABLE payments_onlinepayment (
     id CHAR(36) PRIMARY KEY,
-    user_id INT NOT NULL,
+    user_id BIGINT NOT NULL,
     gateway_id BIGINT NOT NULL,
     payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
     amount INT UNSIGNED NOT NULL DEFAULT 0,
