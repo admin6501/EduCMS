@@ -6056,11 +6056,13 @@ issue_ssl(){
 }
 
 ensure_cron(){
-  cat > /etc/cron.d/educms-certbot-renew <<CRON
+  # Using single-quoted heredoc to prevent variable expansion, then using sed to replace
+  cat > /etc/cron.d/educms-certbot-renew <<'CRON'
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-17 3 * * * root certbot renew --quiet && docker compose -f ${APP_DIR}/docker-compose.yml restart nginx >/dev/null 2>&1 || true
+17 3 * * * root certbot renew --quiet && docker compose -f __APP_DIR__/docker-compose.yml restart nginx >/dev/null 2>&1 || true
 CRON
+  sed -i "s|__APP_DIR__|${APP_DIR}|g" /etc/cron.d/educms-certbot-renew
   chmod 644 /etc/cron.d/educms-certbot-renew
 }
 
