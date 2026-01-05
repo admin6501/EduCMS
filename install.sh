@@ -1389,10 +1389,41 @@ PY
 
   cat > app/settingsapp/apps.py <<'PY'
 from django.apps import AppConfig
+
 class SettingsappConfig(AppConfig):
   default_auto_field="django.db.models.BigAutoField"
   name="settingsapp"
   verbose_name="تنظیمات سایت"
+  
+  def ready(self):
+    # ثبت سیگنال‌ها برای لاگ ورود
+    from django.contrib.auth.signals import user_logged_in, user_login_failed
+    from .signals import log_successful_login, log_failed_login
+    
+    user_logged_in.connect(log_successful_login)
+    user_login_failed.connect(log_failed_login)
+PY
+
+  cat > app/settingsapp/signals.py <<'PY'
+"""سیگنال‌های مربوط به امنیت و ورود"""
+
+def log_successful_login(sender, request, user, **kwargs):
+  """ثبت ورود موفق"""
+  try:
+    from .ip_security import record_login_attempt
+    username = getattr(user, 'email', '') or getattr(user, 'username', '')
+    record_login_attempt(request, username, is_successful=True)
+  except Exception as e:
+    print(f"Error logging successful login: {e}")
+
+def log_failed_login(sender, credentials, request, **kwargs):
+  """ثبت تلاش ناموفق ورود"""
+  try:
+    from .ip_security import record_login_attempt
+    username = credentials.get('username', '') or credentials.get('email', '')
+    record_login_attempt(request, username, is_successful=False)
+  except Exception as e:
+    print(f"Error logging failed login: {e}")
 PY
   cat > app/settingsapp/models.py <<'PY'
 from django.db import models
