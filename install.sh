@@ -72,14 +72,18 @@ collect_inputs(){
 
 cleanup_old(){
   if [[ -d "$APP_DIR" && -f "$APP_DIR/docker-compose.yml" ]]; then
+    echo "Stopping existing containers..."
     (cd "$APP_DIR" && docker compose down --remove-orphans --volumes) || true
   fi
-  rm -rf "$APP_DIR" || true
+  if [[ -d "$APP_DIR" ]]; then
+    echo "Removing old installation..."
+    rm -rf "$APP_DIR" || true
+  fi
 }
 
 ensure_dirs(){
   mkdir -p "$APP_DIR" "$BACKUP_DIR"
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   mkdir -p app/{educms,accounts,courses,settingsapp,payments,tickets,dashboard} \
            app/templates/{accounts,courses,orders,tickets,settings,dashboard,wallet,invoices,partials} \
            app/static app/media app/staticfiles nginx certbot/www
