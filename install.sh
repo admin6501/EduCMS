@@ -6056,10 +6056,17 @@ issue_ssl(){
   install_certbot
   mkdir -p "${APP_DIR}/certbot/www"
   if [[ -d "/etc/letsencrypt/live/${DOMAIN}" ]]; then
+    echo "SSL certificate exists, attempting renewal..."
     certbot renew --quiet || true
     return 0
   fi
-  certbot certonly --webroot -w "${APP_DIR}/certbot/www" -d "${DOMAIN}" --email "${LE_EMAIL}" --agree-tos --non-interactive
+  echo "Requesting new SSL certificate..."
+  if certbot certonly --webroot -w "${APP_DIR}/certbot/www" -d "${DOMAIN}" --email "${LE_EMAIL}" --agree-tos --non-interactive; then
+    echo "✅ SSL certificate obtained successfully."
+  else
+    echo "⚠️  Warning: Failed to obtain SSL certificate. Site will run with HTTP only."
+    echo "    You can retry later with: certbot certonly --webroot -w ${APP_DIR}/certbot/www -d ${DOMAIN}"
+  fi
 }
 
 ensure_cron(){
