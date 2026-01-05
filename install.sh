@@ -5446,6 +5446,140 @@ if [ $attempt -gt $max_attempts ]; then
     exit 1
 fi
 
+# ========== CREATE TABLES BEFORE MIGRATIONS ==========
+echo "Pre-creating payment and security tables..."
+python - <<'PRECREATE'
+import os
+import MySQLdb
+
+db_config = {
+    'host': os.getenv('DB_HOST', 'db'),
+    'user': os.getenv('DB_USER'),
+    'passwd': os.getenv('DB_PASSWORD'),
+    'db': os.getenv('DB_NAME'),
+    'port': int(os.getenv('DB_PORT', 3306))
+}
+
+def safe_exec(cursor, sql, msg=""):
+    try:
+        cursor.execute(sql)
+        if msg:
+            print(f"  ✓ {msg}")
+        return True
+    except Exception as e:
+        if msg:
+            print(f"  - {msg}: {e}")
+        return False
+
+try:
+    conn = MySQLdb.connect(**db_config)
+    cursor = conn.cursor()
+    
+    # Drop payments_onlinepayment if exists (to fix schema)
+    safe_exec(cursor, "DROP TABLE IF EXISTS payments_onlinepayment", "Dropped old payments_onlinepayment")
+    
+    # Create payments_paymentgateway
+    safe_exec(cursor, '''
+        CREATE TABLE IF NOT EXISTS payments_paymentgateway (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            gateway_type VARCHAR(20) NOT NULL UNIQUE,
+            merchant_id VARCHAR(100) NOT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 0,
+            is_sandbox TINYINT(1) NOT NULL DEFAULT 0,
+            priority INT UNSIGNED NOT NULL DEFAULT 0,
+            description VARCHAR(200) DEFAULT '',
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created payments_paymentgateway")
+    conn.commit()
+    
+    # Create payments_onlinepayment with CORRECT schema
+    safe_exec(cursor, '''
+        CREATE TABLE payments_onlinepayment (
+            id CHAR(36) PRIMARY KEY,
+            user_id INT NOT NULL,
+            gateway_id BIGINT NOT NULL,
+            payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
+            amount INT UNSIGNED NOT NULL DEFAULT 0,
+            order_id CHAR(36) NULL,
+            authority VARCHAR(100) DEFAULT '',
+            ref_id VARCHAR(100) DEFAULT '',
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            gateway_response JSON DEFAULT NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            paid_at DATETIME(6) NULL,
+            KEY idx_user (user_id),
+            KEY idx_gateway (gateway_id),
+            KEY idx_order (order_id),
+            KEY idx_authority (authority)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created payments_onlinepayment")
+    conn.commit()
+    
+    # Create IP security tables
+    safe_exec(cursor, '''
+        CREATE TABLE IF NOT EXISTS settingsapp_ipsecuritysetting (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+            max_attempts INT UNSIGNED NOT NULL DEFAULT 5,
+            block_duration_type VARCHAR(10) NOT NULL DEFAULT 'minutes',
+            block_duration_value INT UNSIGNED NOT NULL DEFAULT 30,
+            reset_attempts_after INT UNSIGNED NOT NULL DEFAULT 60,
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created settingsapp_ipsecuritysetting")
+    
+    safe_exec(cursor, '''
+        INSERT IGNORE INTO settingsapp_ipsecuritysetting (id, is_enabled, max_attempts, block_duration_type, block_duration_value, reset_attempts_after)
+        VALUES (1, 1, 5, 'minutes', 30, 60)
+    ''', "Inserted default IP settings")
+    
+    safe_exec(cursor, '''
+        CREATE TABLE IF NOT EXISTS settingsapp_ipwhitelist (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(39) NOT NULL UNIQUE,
+            description VARCHAR(200) DEFAULT '',
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created settingsapp_ipwhitelist")
+    
+    safe_exec(cursor, '''
+        CREATE TABLE IF NOT EXISTS settingsapp_ipblacklist (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(39) NOT NULL,
+            block_type VARCHAR(10) NOT NULL DEFAULT 'auto',
+            reason VARCHAR(300) DEFAULT '',
+            is_permanent TINYINT(1) NOT NULL DEFAULT 0,
+            blocked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            expires_at DATETIME(6) NULL,
+            failed_attempts INT UNSIGNED NOT NULL DEFAULT 0,
+            KEY idx_ip (ip_address),
+            KEY idx_expires (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created settingsapp_ipblacklist")
+    
+    safe_exec(cursor, '''
+        CREATE TABLE IF NOT EXISTS settingsapp_loginattempt (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(39) NOT NULL,
+            username VARCHAR(150) DEFAULT '',
+            is_successful TINYINT(1) NOT NULL DEFAULT 0,
+            user_agent TEXT,
+            attempted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            KEY idx_ip (ip_address),
+            KEY idx_at (attempted_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ''', "Created settingsapp_loginattempt")
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Pre-creation completed.")
+except Exception as e:
+    print(f"Pre-creation error: {e}")
+PRECREATE
+
 echo "Running migrations..."
 python manage.py makemigrations accounts settingsapp courses payments tickets dashboard --noinput || true
 
