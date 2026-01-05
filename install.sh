@@ -5796,18 +5796,19 @@ try:
                 description VARCHAR(200) DEFAULT '',
                 created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
                 updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created payments_paymentgateway table")
+    conn.commit()
 
     # ===== ONLINE PAYMENT =====
     if not table_exists(cursor, 'payments_onlinepayment'):
         safe_exec(cursor, '''
             CREATE TABLE payments_onlinepayment (
                 id CHAR(36) PRIMARY KEY,
-                user_id BIGINT NOT NULL,
-                gateway_id BIGINT NOT NULL,
-                payment_type VARCHAR(10) NOT NULL,
-                amount INT UNSIGNED NOT NULL,
+                user_id BIGINT NULL,
+                gateway_id BIGINT NULL,
+                payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
+                amount INT UNSIGNED NOT NULL DEFAULT 0,
                 order_id CHAR(36) NULL,
                 authority VARCHAR(100) DEFAULT '',
                 ref_id VARCHAR(100) DEFAULT '',
@@ -5815,14 +5816,13 @@ try:
                 gateway_response JSON DEFAULT NULL,
                 created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
                 paid_at DATETIME(6) NULL,
-                KEY payments_onlinepayment_user_id (user_id),
-                KEY payments_onlinepayment_gateway_id (gateway_id),
-                KEY payments_onlinepayment_order_id (order_id),
-                KEY payments_onlinepayment_authority (authority),
-                CONSTRAINT fk_onlinepayment_user FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE,
-                CONSTRAINT fk_onlinepayment_gateway FOREIGN KEY (gateway_id) REFERENCES payments_paymentgateway(id) ON DELETE RESTRICT
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                KEY idx_onlinepayment_user (user_id),
+                KEY idx_onlinepayment_gateway (gateway_id),
+                KEY idx_onlinepayment_order (order_id),
+                KEY idx_onlinepayment_authority (authority)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created payments_onlinepayment table")
+    conn.commit()
 
     # ===== IP SECURITY SETTING =====
     if not table_exists(cursor, 'settingsapp_ipsecuritysetting'):
@@ -5835,13 +5835,15 @@ try:
                 block_duration_value INT UNSIGNED NOT NULL DEFAULT 30,
                 reset_attempts_after INT UNSIGNED NOT NULL DEFAULT 60,
                 updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created settingsapp_ipsecuritysetting table")
+        conn.commit()
         # Insert default setting
         safe_exec(cursor, '''
             INSERT INTO settingsapp_ipsecuritysetting (id, is_enabled, max_attempts, block_duration_type, block_duration_value, reset_attempts_after)
             VALUES (1, 1, 5, 'minutes', 30, 60)
         ''', "Inserted default IP security settings")
+    conn.commit()
 
     # ===== IP WHITELIST =====
     if not table_exists(cursor, 'settingsapp_ipwhitelist'):
@@ -5851,8 +5853,9 @@ try:
                 ip_address VARCHAR(39) NOT NULL UNIQUE,
                 description VARCHAR(200) DEFAULT '',
                 created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created settingsapp_ipwhitelist table")
+    conn.commit()
 
     # ===== IP BLACKLIST =====
     if not table_exists(cursor, 'settingsapp_ipblacklist'):
@@ -5866,10 +5869,11 @@ try:
                 blocked_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
                 expires_at DATETIME(6) NULL,
                 failed_attempts INT UNSIGNED NOT NULL DEFAULT 0,
-                KEY settingsapp_ipblacklist_ip (ip_address),
-                KEY settingsapp_ipblacklist_expires (expires_at)
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                KEY idx_ipblacklist_ip (ip_address),
+                KEY idx_ipblacklist_expires (expires_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created settingsapp_ipblacklist table")
+    conn.commit()
 
     # ===== LOGIN ATTEMPT =====
     if not table_exists(cursor, 'settingsapp_loginattempt'):
@@ -5881,12 +5885,12 @@ try:
                 is_successful TINYINT(1) NOT NULL DEFAULT 0,
                 user_agent TEXT,
                 attempted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                KEY settingsapp_loginattempt_ip (ip_address),
-                KEY settingsapp_loginattempt_at (attempted_at)
-            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                KEY idx_loginattempt_ip (ip_address),
+                KEY idx_loginattempt_at (attempted_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created settingsapp_loginattempt table")
-
     conn.commit()
+
     cursor.close()
     conn.close()
     print("Payment Gateway and IP Security tables created successfully.")
