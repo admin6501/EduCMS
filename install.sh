@@ -1481,6 +1481,101 @@ class NavLink(models.Model):
   class Meta:
     ordering=["area","order"]; verbose_name="لینک"; verbose_name_plural="لینک‌ها"
   def __str__(self): return f"{self.area}:{self.title}"
+
+# ==================== IP SECURITY ====================
+
+class IPSecuritySetting(models.Model):
+  """تنظیمات امنیتی IP"""
+  is_enabled = models.BooleanField(default=True, verbose_name=_("محدودیت IP فعال"))
+  max_attempts = models.PositiveIntegerField(default=5, verbose_name=_("حداکثر تلاش ناموفق"))
+  
+  BLOCK_DURATION_TYPE = (
+    ("minutes", _("دقیقه")),
+    ("hours", _("ساعت")),
+    ("today", _("تا پایان امروز")),
+    ("forever", _("دائمی")),
+  )
+  block_duration_type = models.CharField(max_length=10, choices=BLOCK_DURATION_TYPE, default="minutes", verbose_name=_("نوع مدت زمان"))
+  block_duration_value = models.PositiveIntegerField(default=30, verbose_name=_("مقدار زمان"), help_text=_("برای دقیقه و ساعت"))
+  
+  reset_attempts_after = models.PositiveIntegerField(default=60, verbose_name=_("پاک شدن تلاش‌ها بعد از (دقیقه)"), help_text=_("بعد از این زمان، شمارش تلاش‌های ناموفق ریست می‌شود"))
+  
+  updated_at = models.DateTimeField(auto_now=True)
+  
+  class Meta:
+    verbose_name = _("تنظیمات امنیت IP")
+    verbose_name_plural = _("تنظیمات امنیت IP")
+  
+  def __str__(self):
+    return "تنظیمات امنیت IP"
+  
+  @classmethod
+  def get_settings(cls):
+    obj, _ = cls.objects.get_or_create(pk=1)
+    return obj
+
+class IPWhitelist(models.Model):
+  """لیست سفید IP - این IP ها هیچوقت بلاک نمی‌شوند"""
+  ip_address = models.GenericIPAddressField(unique=True, verbose_name=_("آدرس IP"))
+  description = models.CharField(max_length=200, blank=True, verbose_name=_("توضیحات"))
+  created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("تاریخ ایجاد"))
+  
+  class Meta:
+    verbose_name = _("IP مجاز (Whitelist)")
+    verbose_name_plural = _("IP های مجاز (Whitelist)")
+  
+  def __str__(self):
+    return f"{self.ip_address} - {self.description or 'بدون توضیح'}"
+
+class IPBlockType(models.TextChoices):
+  AUTO = "auto", _("خودکار (تلاش ناموفق)")
+  MANUAL = "manual", _("دستی")
+
+class IPBlacklist(models.Model):
+  """لیست سیاه IP - IP های بلاک شده"""
+  ip_address = models.GenericIPAddressField(verbose_name=_("آدرس IP"))
+  block_type = models.CharField(max_length=10, choices=IPBlockType.choices, default=IPBlockType.AUTO, verbose_name=_("نوع بلاک"))
+  reason = models.CharField(max_length=300, blank=True, verbose_name=_("دلیل"))
+  is_permanent = models.BooleanField(default=False, verbose_name=_("دائمی"))
+  blocked_at = models.DateTimeField(auto_now_add=True, verbose_name=_("زمان بلاک"))
+  expires_at = models.DateTimeField(blank=True, null=True, verbose_name=_("تاریخ انقضا"))
+  failed_attempts = models.PositiveIntegerField(default=0, verbose_name=_("تعداد تلاش ناموفق"))
+  
+  class Meta:
+    verbose_name = _("IP بلاک شده")
+    verbose_name_plural = _("IP های بلاک شده")
+  
+  def __str__(self):
+    status = "دائمی" if self.is_permanent else f"تا {self.expires_at}"
+    return f"{self.ip_address} ({status})"
+  
+  def is_active(self):
+    """آیا بلاک هنوز فعال است؟"""
+    if self.is_permanent:
+      return True
+    if self.expires_at:
+      from django.utils import timezone
+      return timezone.now() < self.expires_at
+    return False
+  is_active.boolean = True
+  is_active.short_description = _("فعال")
+
+class LoginAttempt(models.Model):
+  """ثبت تلاش‌های ورود"""
+  ip_address = models.GenericIPAddressField(verbose_name=_("آدرس IP"), db_index=True)
+  username = models.CharField(max_length=150, blank=True, verbose_name=_("نام کاربری"))
+  is_successful = models.BooleanField(default=False, verbose_name=_("موفق"))
+  user_agent = models.TextField(blank=True, verbose_name=_("User Agent"))
+  attempted_at = models.DateTimeField(auto_now_add=True, verbose_name=_("زمان تلاش"), db_index=True)
+  
+  class Meta:
+    verbose_name = _("تلاش ورود")
+    verbose_name_plural = _("تلاش‌های ورود")
+    ordering = ["-attempted_at"]
+  
+  def __str__(self):
+    status = "✓" if self.is_successful else "✗"
+    return f"{self.ip_address} - {self.username} [{status}]"
 PY
   # فایل کمکی برای تاریخ هوشمند در ادمین
   cat > app/settingsapp/date_utils.py <<'PY'
