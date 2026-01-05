@@ -5903,6 +5903,56 @@ except Exception as e:
     print(f"Payment/IP Security tables error (may be ok): {e}")
 PYPAY
 
+echo "Fixing BankTransferSetting schema..."
+python manage.py shell <<'PYBANK'
+import os
+import MySQLdb
+
+db_config = {
+    'host': os.getenv('DB_HOST', 'db'),
+    'user': os.getenv('DB_USER'),
+    'passwd': os.getenv('DB_PASSWORD'),
+    'db': os.getenv('DB_NAME'),
+    'port': int(os.getenv('DB_PORT', 3306))
+}
+
+def column_exists(cursor, table, column):
+    cursor.execute(f"SHOW COLUMNS FROM {table} LIKE '{column}'")
+    return cursor.fetchone() is not None
+
+def table_exists(cursor, table):
+    cursor.execute(f"SHOW TABLES LIKE '{table}'")
+    return cursor.fetchone() is not None
+
+def safe_exec(cursor, sql, msg=None):
+    try:
+        cursor.execute(sql)
+        if msg:
+            print(msg)
+        return True
+    except Exception as e:
+        if msg:
+            print(f"{msg} (skipped): {e}")
+        return False
+
+try:
+    conn = MySQLdb.connect(**db_config)
+    cursor = conn.cursor()
+
+    # Add sheba column to BankTransferSetting if not exists
+    if table_exists(cursor, 'payments_banktransfersetting'):
+        if not column_exists(cursor, 'payments_banktransfersetting', 'sheba'):
+            safe_exec(cursor, "ALTER TABLE payments_banktransfersetting ADD COLUMN sheba VARCHAR(30) DEFAULT ''",
+                      "Added sheba column to payments_banktransfersetting")
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+    print("BankTransferSetting schema fixed successfully.")
+except Exception as e:
+    print(f"BankTransferSetting fix error (may be ok): {e}")
+PYBANK
+
 echo "Seeding database..."
 python manage.py shell <<'PY'
 import os
