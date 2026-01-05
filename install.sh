@@ -2272,6 +2272,53 @@ def wallet_apply(user, amount:int, kind:str, ref_order=None, description=""):
     w.refresh_from_db(fields=["balance"])
     WalletTransaction.objects.create(wallet=w, kind=kind, amount=int(amount), ref_order=ref_order, description=description)
     return w
+
+class GatewayType(models.TextChoices):
+  ZARINPAL="zarinpal",_("زرین‌پال")
+  ZIBAL="zibal",_("زیبال")
+  IDPAY="idpay",_("آقای پرداخت (IDPay)")
+
+class PaymentGateway(models.Model):
+  gateway_type=models.CharField(max_length=20, choices=GatewayType.choices, unique=True, verbose_name=_("نوع درگاه"))
+  merchant_id=models.CharField(max_length=100, verbose_name=_("مرچنت کد"))
+  is_active=models.BooleanField(default=False, verbose_name=_("فعال"))
+  is_sandbox=models.BooleanField(default=False, verbose_name=_("حالت تست (Sandbox)"))
+  priority=models.PositiveIntegerField(default=0, verbose_name=_("اولویت نمایش"), help_text=_("عدد کمتر = اولویت بالاتر"))
+  description=models.CharField(max_length=200, blank=True, verbose_name=_("توضیحات"))
+  created_at=models.DateTimeField(auto_now_add=True)
+  updated_at=models.DateTimeField(auto_now=True)
+  class Meta:
+    ordering=["priority","gateway_type"]
+    verbose_name=_("درگاه پرداخت"); verbose_name_plural=_("درگاه‌های پرداخت")
+  def __str__(self): return self.get_gateway_type_display()
+
+class OnlinePaymentStatus(models.TextChoices):
+  PENDING="pending",_("در انتظار پرداخت")
+  SUCCESS="success",_("موفق")
+  FAILED="failed",_("ناموفق")
+  CANCELED="canceled",_("لغو شده")
+
+class OnlinePaymentType(models.TextChoices):
+  ORDER="order",_("خرید دوره")
+  WALLET="wallet",_("شارژ کیف پول")
+
+class OnlinePayment(models.Model):
+  id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+  user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="online_payments", verbose_name=_("کاربر"))
+  gateway=models.ForeignKey(PaymentGateway, on_delete=models.PROTECT, verbose_name=_("درگاه"))
+  payment_type=models.CharField(max_length=10, choices=OnlinePaymentType.choices, verbose_name=_("نوع پرداخت"))
+  amount=models.PositiveIntegerField(verbose_name=_("مبلغ (تومان)"))
+  order=models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name="online_payments", verbose_name=_("سفارش"))
+  authority=models.CharField(max_length=100, blank=True, verbose_name=_("کد پیگیری درگاه"))
+  ref_id=models.CharField(max_length=100, blank=True, verbose_name=_("شماره مرجع"))
+  status=models.CharField(max_length=20, choices=OnlinePaymentStatus.choices, default=OnlinePaymentStatus.PENDING, verbose_name=_("وضعیت"))
+  gateway_response=models.JSONField(default=dict, blank=True, verbose_name=_("پاسخ درگاه"))
+  created_at=models.DateTimeField(auto_now_add=True, verbose_name=_("تاریخ ایجاد"))
+  paid_at=models.DateTimeField(blank=True, null=True, verbose_name=_("تاریخ پرداخت"))
+  class Meta:
+    ordering=["-created_at"]
+    verbose_name=_("پرداخت آنلاین"); verbose_name_plural=_("پرداخت‌های آنلاین")
+  def __str__(self): return f"{self.get_payment_type_display()} - {self.amount} تومان"
 PY
 
   cat > app/payments/utils.py <<'PY'
