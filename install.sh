@@ -2348,6 +2348,172 @@ def validate_coupon(code,user,base):
   if c.max_uses and coupon_total_uses(c) >= c.max_uses: return None,"سقف استفاده پر شده."
   if c.max_uses_per_user and coupon_user_uses(c,user) >= c.max_uses_per_user: return None,"سقف استفاده شما پر شده."
   return c,""
+
+import requests
+import json
+
+def get_active_gateways():
+  """دریافت لیست درگاه‌های فعال"""
+  from .models import PaymentGateway
+  return list(PaymentGateway.objects.filter(is_active=True).order_by("priority"))
+
+# ========== ZARINPAL ==========
+def zarinpal_request(gateway, amount, callback_url, description, email="", mobile=""):
+  """ایجاد درخواست پرداخت زرین‌پال"""
+  if gateway.is_sandbox:
+    url = "https://sandbox.zarinpal.com/pg/v4/payment/request.json"
+  else:
+    url = "https://payment.zarinpal.com/pg/v4/payment/request.json"
+  
+  data = {
+    "merchant_id": gateway.merchant_id,
+    "amount": int(amount) * 10,  # تبدیل تومان به ریال
+    "callback_url": callback_url,
+    "description": description,
+  }
+  if email: data["metadata"] = {"email": email}
+  if mobile: data["metadata"] = data.get("metadata", {}); data["metadata"]["mobile"] = mobile
+  
+  try:
+    resp = requests.post(url, json=data, timeout=30)
+    result = resp.json()
+    if result.get("data") and result["data"].get("authority"):
+      return True, result["data"]["authority"], result
+    return False, result.get("errors", {}).get("message", "خطا در ارتباط با زرین‌پال"), result
+  except Exception as e:
+    return False, str(e), {}
+
+def zarinpal_redirect_url(gateway, authority):
+  """ساخت URL ریدایرکت به درگاه زرین‌پال"""
+  if gateway.is_sandbox:
+    return f"https://sandbox.zarinpal.com/pg/StartPay/{authority}"
+  return f"https://payment.zarinpal.com/pg/StartPay/{authority}"
+
+def zarinpal_verify(gateway, authority, amount):
+  """تایید پرداخت زرین‌پال"""
+  if gateway.is_sandbox:
+    url = "https://sandbox.zarinpal.com/pg/v4/payment/verify.json"
+  else:
+    url = "https://payment.zarinpal.com/pg/v4/payment/verify.json"
+  
+  data = {
+    "merchant_id": gateway.merchant_id,
+    "amount": int(amount) * 10,  # تبدیل تومان به ریال
+    "authority": authority,
+  }
+  
+  try:
+    resp = requests.post(url, json=data, timeout=30)
+    result = resp.json()
+    if result.get("data") and result["data"].get("code") == 100:
+      return True, str(result["data"].get("ref_id", "")), result
+    elif result.get("data") and result["data"].get("code") == 101:
+      return True, str(result["data"].get("ref_id", "")), result  # قبلا تایید شده
+    return False, result.get("errors", {}).get("message", "خطا در تایید"), result
+  except Exception as e:
+    return False, str(e), {}
+
+# ========== ZIBAL ==========
+def zibal_request(gateway, amount, callback_url, description, mobile=""):
+  """ایجاد درخواست پرداخت زیبال"""
+  url = "https://gateway.zibal.ir/v1/request"
+  
+  data = {
+    "merchant": gateway.merchant_id if not gateway.is_sandbox else "zibal",
+    "amount": int(amount) * 10,  # تبدیل تومان به ریال
+    "callbackUrl": callback_url,
+    "description": description,
+  }
+  if mobile: data["mobile"] = mobile
+  
+  try:
+    resp = requests.post(url, json=data, timeout=30)
+    result = resp.json()
+    if result.get("result") == 100 and result.get("trackId"):
+      return True, str(result["trackId"]), result
+    return False, result.get("message", "خطا در ارتباط با زیبال"), result
+  except Exception as e:
+    return False, str(e), {}
+
+def zibal_redirect_url(gateway, track_id):
+  """ساخت URL ریدایرکت به درگاه زیبال"""
+  return f"https://gateway.zibal.ir/start/{track_id}"
+
+def zibal_verify(gateway, track_id):
+  """تایید پرداخت زیبال"""
+  url = "https://gateway.zibal.ir/v1/verify"
+  
+  data = {
+    "merchant": gateway.merchant_id if not gateway.is_sandbox else "zibal",
+    "trackId": track_id,
+  }
+  
+  try:
+    resp = requests.post(url, json=data, timeout=30)
+    result = resp.json()
+    if result.get("result") == 100:
+      return True, str(result.get("refNumber", "")), result
+    return False, result.get("message", "خطا در تایید"), result
+  except Exception as e:
+    return False, str(e), {}
+
+# ========== IDPAY (آقای پرداخت) ==========
+def idpay_request(gateway, amount, callback_url, description, order_id, name="", email="", phone=""):
+  """ایجاد درخواست پرداخت آقای پرداخت"""
+  if gateway.is_sandbox:
+    url = "https://api.idpay.ir/v1.1/payment"
+    headers = {"X-API-KEY": gateway.merchant_id, "X-SANDBOX": "1", "Content-Type": "application/json"}
+  else:
+    url = "https://api.idpay.ir/v1.1/payment"
+    headers = {"X-API-KEY": gateway.merchant_id, "Content-Type": "application/json"}
+  
+  data = {
+    "order_id": str(order_id),
+    "amount": int(amount) * 10,  # تبدیل تومان به ریال
+    "callback": callback_url,
+    "desc": description,
+  }
+  if name: data["name"] = name
+  if email: data["mail"] = email
+  if phone: data["phone"] = phone
+  
+  try:
+    resp = requests.post(url, json=data, headers=headers, timeout=30)
+    result = resp.json()
+    if result.get("id") and result.get("link"):
+      return True, result["id"], result
+    return False, result.get("error_message", "خطا در ارتباط با آقای پرداخت"), result
+  except Exception as e:
+    return False, str(e), {}
+
+def idpay_redirect_url(gateway, payment_id, link):
+  """URL ریدایرکت آقای پرداخت (مستقیم از پاسخ API)"""
+  return link
+
+def idpay_verify(gateway, payment_id, order_id):
+  """تایید پرداخت آقای پرداخت"""
+  if gateway.is_sandbox:
+    url = "https://api.idpay.ir/v1.1/payment/verify"
+    headers = {"X-API-KEY": gateway.merchant_id, "X-SANDBOX": "1", "Content-Type": "application/json"}
+  else:
+    url = "https://api.idpay.ir/v1.1/payment/verify"
+    headers = {"X-API-KEY": gateway.merchant_id, "Content-Type": "application/json"}
+  
+  data = {
+    "id": payment_id,
+    "order_id": str(order_id),
+  }
+  
+  try:
+    resp = requests.post(url, json=data, headers=headers, timeout=30)
+    result = resp.json()
+    if result.get("status") == 100:
+      return True, str(result.get("track_id", "")), result
+    elif result.get("status") == 101:
+      return True, str(result.get("track_id", "")), result  # قبلا تایید شده
+    return False, result.get("error_message", "خطا در تایید"), result
+  except Exception as e:
+    return False, str(e), {}
 PY
 
   cat > app/payments/forms.py <<'PY'
