@@ -1682,6 +1682,9 @@ PY
 
   cat > app/settingsapp/admin.py <<'PY'
 from django.contrib import admin
+from django.utils.html import format_html
+from django.utils import timezone
+from django.contrib import messages
 from .date_utils import smart_format_datetime
 
 # تنظیمات پایه ادمین
@@ -1689,7 +1692,7 @@ admin.site.site_header = "پنل مدیریت سایت"
 admin.site.site_title = "پنل مدیریت"
 admin.site.index_title = "خوش آمدید به پنل مدیریت"
 
-from .models import SiteSetting, TemplateText, NavLink
+from .models import SiteSetting, TemplateText, NavLink, IPSecuritySetting, IPWhitelist, IPBlacklist, LoginAttempt
 
 @admin.register(SiteSetting)
 class SiteSettingAdmin(admin.ModelAdmin):
@@ -1729,6 +1732,165 @@ try:
         ordering = ("order",)
 except Exception:
     pass
+
+# ==================== IP SECURITY ADMIN ====================
+
+@admin.register(IPSecuritySetting)
+class IPSecuritySettingAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "is_enabled_display", "max_attempts", "block_duration_display", "updated_at_display")
+    
+    fieldsets = (
+        ("وضعیت", {
+            "fields": ("is_enabled",),
+            "description": "فعال یا غیرفعال کردن سیستم محدودیت IP"
+        }),
+        ("تنظیمات بلاک خودکار", {
+            "fields": ("max_attempts", "reset_attempts_after"),
+            "description": "تعداد تلاش ناموفق مجاز و زمان ریست شدن شمارش"
+        }),
+        ("مدت زمان بلاک", {
+            "fields": ("block_duration_type", "block_duration_value"),
+            "description": "مدت زمان بلاک شدن IP پس از تلاش‌های ناموفق"
+        }),
+    )
+    
+    def is_enabled_display(self, obj):
+        if obj.is_enabled:
+            return format_html('<span style="color:green;">✅ فعال</span>')
+        return format_html('<span style="color:red;">❌ غیرفعال</span>')
+    is_enabled_display.short_description = "وضعیت"
+    
+    def block_duration_display(self, obj):
+        if obj.block_duration_type == "forever":
+            return "دائمی"
+        elif obj.block_duration_type == "today":
+            return "تا پایان امروز"
+        elif obj.block_duration_type == "hours":
+            return f"{obj.block_duration_value} ساعت"
+        else:
+            return f"{obj.block_duration_value} دقیقه"
+    block_duration_display.short_description = "مدت بلاک"
+    
+    def updated_at_display(self, obj):
+        return smart_format_datetime(obj.updated_at)
+    updated_at_display.short_description = "آخرین تغییر"
+
+@admin.register(IPWhitelist)
+class IPWhitelistAdmin(admin.ModelAdmin):
+    list_display = ("ip_address", "description", "created_at_display")
+    search_fields = ("ip_address", "description")
+    ordering = ("ip_address",)
+    
+    fieldsets = (
+        (None, {
+            "fields": ("ip_address", "description"),
+            "description": "IP هایی که در این لیست باشند هیچوقت بلاک نمی‌شوند. مناسب برای IP ادمین‌ها."
+        }),
+    )
+    
+    def created_at_display(self, obj):
+        return smart_format_datetime(obj.created_at)
+    created_at_display.short_description = "تاریخ ایجاد"
+
+@admin.action(description="آنبلاک کردن IP های انتخاب شده")
+def unblock_selected_ips(modeladmin, request, queryset):
+    count = queryset.count()
+    queryset.delete()
+    messages.success(request, f"{count} آدرس IP آنبلاک شد.")
+
+@admin.action(description="تبدیل به بلاک دائمی")
+def make_permanent(modeladmin, request, queryset):
+    queryset.update(is_permanent=True, expires_at=None)
+    messages.success(request, f"{queryset.count()} آدرس IP به صورت دائمی بلاک شد.")
+
+@admin.register(IPBlacklist)
+class IPBlacklistAdmin(admin.ModelAdmin):
+    list_display = ("ip_address", "block_type_display", "reason_short", "is_active_display", "blocked_at_display", "expires_at_display", "failed_attempts")
+    list_filter = ("block_type", "is_permanent")
+    search_fields = ("ip_address", "reason")
+    ordering = ("-blocked_at",)
+    actions = [unblock_selected_ips, make_permanent]
+    
+    fieldsets = (
+        ("اطلاعات IP", {
+            "fields": ("ip_address", "reason"),
+        }),
+        ("نوع بلاک", {
+            "fields": ("block_type", "is_permanent", "expires_at"),
+            "description": "برای بلاک دائمی، گزینه 'دائمی' را تیک بزنید. در غیر این صورت تاریخ انقضا را مشخص کنید."
+        }),
+    )
+    
+    def block_type_display(self, obj):
+        if obj.block_type == "auto":
+            return format_html('<span style="color:orange;">🤖 خودکار</span>')
+        return format_html('<span style="color:purple;">👤 دستی</span>')
+    block_type_display.short_description = "نوع"
+    
+    def reason_short(self, obj):
+        if obj.reason:
+            return obj.reason[:50] + "..." if len(obj.reason) > 50 else obj.reason
+        return "-"
+    reason_short.short_description = "دلیل"
+    
+    def is_active_display(self, obj):
+        if obj.is_active():
+            if obj.is_permanent:
+                return format_html('<span style="color:red;">🔴 دائمی</span>')
+            return format_html('<span style="color:orange;">🟠 فعال</span>')
+        return format_html('<span style="color:green;">🟢 منقضی</span>')
+    is_active_display.short_description = "وضعیت"
+    
+    def blocked_at_display(self, obj):
+        return smart_format_datetime(obj.blocked_at)
+    blocked_at_display.short_description = "زمان بلاک"
+    blocked_at_display.admin_order_field = "blocked_at"
+    
+    def expires_at_display(self, obj):
+        if obj.is_permanent:
+            return format_html('<span style="color:red;">دائمی</span>')
+        if obj.expires_at:
+            return smart_format_datetime(obj.expires_at)
+        return "-"
+    expires_at_display.short_description = "انقضا"
+
+@admin.action(description="پاکسازی لاگ‌های قدیمی‌تر از ۷ روز")
+def cleanup_old_logs(modeladmin, request, queryset):
+    from .ip_security import cleanup_old_attempts
+    deleted, _ = cleanup_old_attempts(days=7)
+    messages.success(request, f"{deleted} لاگ قدیمی پاک شد.")
+
+@admin.register(LoginAttempt)
+class LoginAttemptAdmin(admin.ModelAdmin):
+    list_display = ("ip_address", "username", "is_successful_display", "attempted_at_display", "user_agent_short")
+    list_filter = ("is_successful", "attempted_at")
+    search_fields = ("ip_address", "username")
+    ordering = ("-attempted_at",)
+    readonly_fields = ("ip_address", "username", "is_successful", "user_agent", "attempted_at")
+    actions = [cleanup_old_logs]
+    
+    def is_successful_display(self, obj):
+        if obj.is_successful:
+            return format_html('<span style="color:green;">✅ موفق</span>')
+        return format_html('<span style="color:red;">❌ ناموفق</span>')
+    is_successful_display.short_description = "وضعیت"
+    
+    def attempted_at_display(self, obj):
+        return smart_format_datetime(obj.attempted_at)
+    attempted_at_display.short_description = "زمان"
+    attempted_at_display.admin_order_field = "attempted_at"
+    
+    def user_agent_short(self, obj):
+        if obj.user_agent:
+            return obj.user_agent[:60] + "..." if len(obj.user_agent) > 60 else obj.user_agent
+        return "-"
+    user_agent_short.short_description = "مرورگر"
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
 PY
   cat > app/settingsapp/context_processors.py <<'PY'
 from .models import SiteSetting, TemplateText, NavLink
