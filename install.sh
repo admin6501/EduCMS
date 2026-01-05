@@ -6269,7 +6269,17 @@ SQLFIX
 }
 
 
-do_start(){ cd "$APP_DIR" || die "Cannot cd to $APP_DIR"; docker compose up -d >/dev/null 2>&1 || docker compose up -d; echo "Started."; }
+do_start(){ 
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
+  echo "Starting containers..."
+  if docker compose up -d >/dev/null 2>&1; then
+    echo "✅ Started successfully."
+  else
+    echo "First attempt failed, retrying with verbose output..."
+    docker compose up -d
+    echo "Started."
+  fi
+}
 
 do_stop(){ 
   cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
