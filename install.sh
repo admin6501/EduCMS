@@ -6481,14 +6481,29 @@ change_domain(){
 
 do_uninstall(){
   require_root; require_tty
-  echo "WARNING: This removes ${APP_DIR} and docker volumes."
+  echo "============================================"
+  echo "⚠️  WARNING: UNINSTALL"
+  echo "============================================"
+  echo "This will permanently remove:"
+  echo "  - Application directory: ${APP_DIR}"
+  echo "  - All Docker containers and volumes"
+  echo "  - All database data"
+  echo "============================================"
   read -r -p "Type YES to continue: " ans </dev/tty || true
   [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
+  
+  echo "Stopping and removing containers..."
   if [[ -d "${APP_DIR}" && -f "${APP_DIR}/docker-compose.yml" ]]; then
     (cd "${APP_DIR}" && docker compose down --remove-orphans --volumes) || true
   fi
+  
+  echo "Removing application directory..."
   rm -rf "${APP_DIR}" || true
-  echo "Uninstalled."
+  
+  echo "Removing cron job..."
+  rm -f /etc/cron.d/educms-certbot-renew 2>/dev/null || true
+  
+  echo "✅ Uninstalled successfully."
 }
 
 menu_header(){
