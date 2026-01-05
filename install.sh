@@ -6159,16 +6159,26 @@ do_patch(){
   ensure_dirs
   write_compose
   write_project
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   
   # Load env vars
   set -a; . "$ENV_FILE"; set +a
   
+  echo "Building and starting containers..."
   docker compose up -d --build db web nginx
   
   # Wait for DB to be ready
-  echo "Waiting for database..."
-  sleep 5
+  echo "Waiting for database to be ready..."
+  local wait_count=0
+  while ! docker compose exec -T db mysqladmin ping -h 127.0.0.1 -uroot -p"${DB_PASS}" --silent 2>/dev/null; do
+    wait_count=$((wait_count + 1))
+    if [[ $wait_count -gt 30 ]]; then
+      echo "Warning: Database might not be ready, continuing anyway..."
+      break
+    fi
+    echo "  Waiting... ($wait_count/30)"
+    sleep 2
+  done
   
   # Fix database tables for new features
   echo "Fixing database tables..."
