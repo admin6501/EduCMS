@@ -5802,6 +5802,18 @@ try:
     conn.commit()
 
     # ===== ONLINE PAYMENT =====
+    # First check if table has wrong column type and drop it
+    if table_exists(cursor, 'payments_onlinepayment'):
+        cursor.execute("SHOW COLUMNS FROM payments_onlinepayment LIKE 'user_id'")
+        row = cursor.fetchone()
+        if row:
+            col_type = (row[1] or '').lower()
+            # If user_id is BIGINT or wrong type, drop table and recreate
+            if 'bigint' in col_type or 'null' in str(row[2]).lower():
+                print("Dropping payments_onlinepayment table (wrong column type)...")
+                safe_exec(cursor, "DROP TABLE payments_onlinepayment", "Dropped payments_onlinepayment")
+                conn.commit()
+    
     if not table_exists(cursor, 'payments_onlinepayment'):
         safe_exec(cursor, '''
             CREATE TABLE payments_onlinepayment (
@@ -5823,10 +5835,6 @@ try:
                 KEY idx_onlinepayment_authority (authority)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ''', "Created payments_onlinepayment table")
-    else:
-        # Fix user_id column type if wrong
-        safe_exec(cursor, "ALTER TABLE payments_onlinepayment MODIFY COLUMN user_id INT NOT NULL", "Fixed user_id column type")
-        safe_exec(cursor, "ALTER TABLE payments_onlinepayment MODIFY COLUMN gateway_id BIGINT NOT NULL", "Fixed gateway_id column type")
     conn.commit()
 
     # ===== IP SECURITY SETTING =====
