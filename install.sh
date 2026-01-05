@@ -2693,7 +2693,8 @@ def wallet_topup(request):
     messages.success(request,"درخواست شارژ با موفقیت ثبت شد. پس از بررسی، مبلغ به کیف پول شما اضافه می‌شود.")
     return redirect("wallet_home")
   bank_info = BankTransferSetting.objects.first()
-  return render(request,"wallet/topup.html",{"form":form, "bank_info":bank_info})
+  active_gateways = get_active_gateways()
+  return render(request,"wallet/topup.html",{"form":form, "bank_info":bank_info, "active_gateways":active_gateways})
 
 @login_required
 def invoice_list(request):
