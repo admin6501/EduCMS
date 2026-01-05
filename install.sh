@@ -3331,12 +3331,14 @@ PY
 
   cat > app/payments/urls.py <<'PY'
 from django.urls import path
-from .views import checkout, upload_receipt, my_orders, cancel_order
+from .views import checkout, upload_receipt, my_orders, cancel_order, pay_online_order, payment_callback_order
 urlpatterns=[
   path("checkout/<slug:slug>/", checkout, name="checkout"),
   path("receipt/<uuid:order_id>/", upload_receipt, name="upload_receipt"),
   path("my/", my_orders, name="orders_my"),
   path("cancel/<uuid:order_id>/", cancel_order, name="order_cancel"),
+  path("pay/<uuid:order_id>/<str:gateway_type>/", pay_online_order, name="pay_online_order"),
+  path("callback/<str:gateway_type>/", payment_callback_order, name="payment_callback_order"),
 ]
 PY
   cat > app/payments/wallet_urls.py <<'PY'
