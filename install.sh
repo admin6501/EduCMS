@@ -4176,6 +4176,23 @@ HTML
       نهایی: <b>{{ order.final_amount }}</b> تومان
     </div>
 
+    <!-- درگاه‌های پرداخت آنلاین -->
+    {% if active_gateways %}
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/40">
+      <div class="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-3">💳 پرداخت آنلاین</div>
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {% for gw in active_gateways %}
+        <a href="/orders/pay/{{ order.id }}/{{ gw.gateway_type }}/" 
+           class="flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60">
+          {% if gw.gateway_type == "zarinpal" %}💛{% elif gw.gateway_type == "zibal" %}💙{% elif gw.gateway_type == "idpay" %}💚{% else %}💳{% endif %}
+          {{ gw.get_gateway_type_display }}
+          {% if gw.is_sandbox %}<span class="text-xs text-orange-500">(تست)</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="grid gap-3 md:grid-cols-2">
       <a class="rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/receipt/{{ order.id }}/">آپلود رسید کارت‌به‌کارت</a>
       <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
@@ -4187,12 +4204,14 @@ HTML
       </div>
     </div>
 
+    {% if setting %}
     <div class="rounded-2xl border border-slate-200 p-4 text-sm dark:border-slate-800">
-      <div class="font-semibold mb-1">اطلاعات کارت</div>
+      <div class="font-semibold mb-1">اطلاعات کارت (کارت به کارت)</div>
       نام: <b>{{ setting.account_holder|default:"-" }}</b><br>
       کارت: <b dir="ltr">{{ setting.card_number|default:"-" }}</b>
       {% if setting.note %}<div class="mt-2 text-xs text-slate-500 dark:text-slate-300">{{ setting.note }}</div>{% endif %}
     </div>
+    {% endif %}
   </div>
 </div>
 {% endblock %}
