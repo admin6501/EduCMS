@@ -6204,11 +6204,11 @@ do_patch(){
   # Fix database tables for new features
   echo "Fixing database tables..."
   docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot "${DB_NAME}" <<'SQLFIX'
--- Drop and recreate payments_onlinepayment with correct schema
+-- Drop and recreate payments_onlinepayment with correct schema (user_id must be CHAR(36) for UUID)
 DROP TABLE IF EXISTS payments_onlinepayment;
 CREATE TABLE payments_onlinepayment (
     id CHAR(36) PRIMARY KEY,
-    user_id BIGINT NOT NULL,
+    user_id CHAR(36) NOT NULL,
     gateway_id BIGINT NOT NULL,
     payment_type VARCHAR(10) NOT NULL DEFAULT 'order',
     amount INT UNSIGNED NOT NULL DEFAULT 0,
