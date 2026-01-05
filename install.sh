@@ -59,10 +59,15 @@ collect_inputs(){
   local t
   t="$(read_line "Database name [default: ${DB_NAME}]: ")"; [[ -n "${t:-}" ]] && DB_NAME="$t"
   DB_USER="$(read_line "Database username: ")"
+  [[ -n "$DB_USER" ]] || die "Database username cannot be empty"
   DB_PASS="$(read_secret "Database password (hidden): ")"
+  [[ -n "$DB_PASS" ]] || die "Database password cannot be empty"
+  [[ ${#DB_PASS} -ge 4 ]] || die "Database password must be at least 4 characters"
   ADMIN_USER="$(read_line "Admin username: ")"
+  [[ -n "$ADMIN_USER" ]] || die "Admin username cannot be empty"
   ADMIN_PASS="$(read_secret "Admin password (hidden): ")"
-  [[ -n "$DB_USER" && -n "$DB_PASS" && -n "$ADMIN_USER" && -n "$ADMIN_PASS" ]] || die "Empty required input"
+  [[ -n "$ADMIN_PASS" ]] || die "Admin password cannot be empty"
+  [[ ${#ADMIN_PASS} -ge 4 ]] || die "Admin password must be at least 4 characters"
 }
 
 cleanup_old(){
