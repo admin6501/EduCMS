@@ -3688,7 +3688,7 @@ def invoice_pdf(request, order_id):
 PY
 
   cat > app/payments/admin.py <<'PY'
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils import timezone
 from django.utils.html import format_html
 from django.db import transaction
