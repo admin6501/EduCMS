@@ -3343,8 +3343,13 @@ urlpatterns=[
 PY
   cat > app/payments/wallet_urls.py <<'PY'
 from django.urls import path
-from .views import wallet_home, wallet_topup
-urlpatterns=[path("", wallet_home, name="wallet_home"), path("topup/", wallet_topup, name="wallet_topup")]
+from .views import wallet_home, wallet_topup, pay_online_wallet, payment_callback_wallet
+urlpatterns=[
+  path("", wallet_home, name="wallet_home"), 
+  path("topup/", wallet_topup, name="wallet_topup"),
+  path("pay/<str:gateway_type>/", pay_online_wallet, name="pay_online_wallet"),
+  path("callback/<str:gateway_type>/", payment_callback_wallet, name="payment_callback_wallet"),
+]
 PY
   cat > app/payments/invoice_urls.py <<'PY'
 from django.urls import path
