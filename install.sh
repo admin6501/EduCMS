@@ -1902,9 +1902,11 @@ def admin_account_in_admin(request):
   return render(request,"settings/admin_account.html",{"form":form})
 PY
   cat > app/settingsapp/middleware.py <<'PY'
-from django.http import HttpResponseNotFound
+from django.http import HttpResponseNotFound, HttpResponseForbidden
 from django.utils.deprecation import MiddlewareMixin
 from django.core.cache import cache
+from django.utils import timezone
+from datetime import timedelta
 from .models import SiteSetting
 
 def _get_admin_path():
@@ -1919,6 +1921,15 @@ def _get_admin_path():
   except Exception:
     return "admin"
 
+def get_client_ip(request):
+  """دریافت IP واقعی کاربر"""
+  x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+  if x_forwarded_for:
+    ip = x_forwarded_for.split(',')[0].strip()
+  else:
+    ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+  return ip
+
 class AdminAliasMiddleware(MiddlewareMixin):
   def process_request(self, request):
     admin_path=(_get_admin_path() or "admin").strip().strip("/") or "admin"
@@ -1932,6 +1943,240 @@ class AdminAliasMiddleware(MiddlewareMixin):
     if pl.startswith(pref):
       request.path_info="/admin/"+p[len(pref):]
     return None
+
+class IPSecurityMiddleware(MiddlewareMixin):
+  """Middleware برای بررسی محدودیت IP در پنل ادمین"""
+  
+  def process_request(self, request):
+    # فقط برای صفحات ادمین چک کن
+    admin_path = _get_admin_path()
+    path = request.path.lower()
+    
+    if not (path.startswith('/admin') or path.startswith(f'/{admin_path}')):
+      return None
+    
+    try:
+      from .models import IPSecuritySetting, IPWhitelist, IPBlacklist
+      
+      settings = IPSecuritySetting.get_settings()
+      if not settings.is_enabled:
+        return None
+      
+      ip = get_client_ip(request)
+      
+      # چک whitelist
+      if IPWhitelist.objects.filter(ip_address=ip).exists():
+        return None
+      
+      # چک blacklist
+      now = timezone.now()
+      blocked = IPBlacklist.objects.filter(ip_address=ip).first()
+      
+      if blocked:
+        if blocked.is_permanent:
+          return HttpResponseForbidden(self._blocked_response(ip, blocked, permanent=True))
+        elif blocked.expires_at and blocked.expires_at > now:
+          return HttpResponseForbidden(self._blocked_response(ip, blocked))
+        else:
+          # بلاک منقضی شده - حذف
+          blocked.delete()
+      
+      return None
+    except Exception:
+      return None
+  
+  def _blocked_response(self, ip, blocked, permanent=False):
+    from django.utils.html import format_html
+    if permanent:
+      msg = f"""
+      <html dir="rtl">
+      <head><meta charset="utf-8"><title>دسترسی مسدود</title></head>
+      <body style="font-family: Tahoma; text-align: center; padding: 50px;">
+        <h1 style="color: #dc2626;">🚫 دسترسی مسدود شد</h1>
+        <p>آدرس IP شما (<code dir="ltr">{ip}</code>) به صورت دائمی مسدود شده است.</p>
+        <p style="color: #666;">دلیل: {blocked.reason or 'نامشخص'}</p>
+        <p>برای رفع مسدودیت با مدیر سایت تماس بگیرید.</p>
+      </body>
+      </html>
+      """
+    else:
+      msg = f"""
+      <html dir="rtl">
+      <head><meta charset="utf-8"><title>دسترسی موقت مسدود</title></head>
+      <body style="font-family: Tahoma; text-align: center; padding: 50px;">
+        <h1 style="color: #dc2626;">⏳ دسترسی موقتاً مسدود شد</h1>
+        <p>آدرس IP شما (<code dir="ltr">{ip}</code>) به دلیل تلاش‌های ناموفق ورود موقتاً مسدود شده است.</p>
+        <p style="color: #666;">دلیل: {blocked.reason or 'تلاش‌های ناموفق متعدد'}</p>
+        <p>تا زمان: <b>{blocked.expires_at.strftime('%Y-%m-%d %H:%M')}</b></p>
+        <p>لطفاً بعداً تلاش کنید.</p>
+      </body>
+      </html>
+      """
+    return msg
+PY
+
+  cat > app/settingsapp/ip_security.py <<'PY'
+"""توابع کمکی برای سیستم امنیت IP"""
+from django.utils import timezone
+from datetime import timedelta, datetime
+
+def get_client_ip(request):
+  """دریافت IP واقعی کاربر"""
+  x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+  if x_forwarded_for:
+    ip = x_forwarded_for.split(',')[0].strip()
+  else:
+    ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+  return ip
+
+def record_login_attempt(request, username, is_successful):
+  """ثبت تلاش ورود و بررسی نیاز به بلاک"""
+  from .models import IPSecuritySetting, IPWhitelist, IPBlacklist, LoginAttempt, IPBlockType
+  
+  try:
+    settings = IPSecuritySetting.get_settings()
+    if not settings.is_enabled:
+      return
+    
+    ip = get_client_ip(request)
+    user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+    
+    # ثبت تلاش
+    LoginAttempt.objects.create(
+      ip_address=ip,
+      username=username or '',
+      is_successful=is_successful,
+      user_agent=user_agent,
+    )
+    
+    # اگر موفق بود، نیازی به بررسی بلاک نیست
+    if is_successful:
+      return
+    
+    # چک whitelist
+    if IPWhitelist.objects.filter(ip_address=ip).exists():
+      return
+    
+    # شمارش تلاش‌های ناموفق اخیر
+    reset_time = timezone.now() - timedelta(minutes=settings.reset_attempts_after)
+    failed_count = LoginAttempt.objects.filter(
+      ip_address=ip,
+      is_successful=False,
+      attempted_at__gte=reset_time
+    ).count()
+    
+    # اگر از حد مجاز رد شده، بلاک کن
+    if failed_count >= settings.max_attempts:
+      block_ip_auto(ip, settings, failed_count)
+  except Exception as e:
+    print(f"Error in record_login_attempt: {e}")
+
+def block_ip_auto(ip, settings, failed_count):
+  """بلاک خودکار IP"""
+  from .models import IPBlacklist, IPBlockType
+  
+  now = timezone.now()
+  
+  # محاسبه زمان انقضا
+  if settings.block_duration_type == "forever":
+    is_permanent = True
+    expires_at = None
+  elif settings.block_duration_type == "today":
+    is_permanent = False
+    # پایان امروز
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    expires_at = tomorrow
+  elif settings.block_duration_type == "hours":
+    is_permanent = False
+    expires_at = now + timedelta(hours=settings.block_duration_value)
+  else:  # minutes
+    is_permanent = False
+    expires_at = now + timedelta(minutes=settings.block_duration_value)
+  
+  # حذف بلاک‌های قبلی این IP
+  IPBlacklist.objects.filter(ip_address=ip, block_type=IPBlockType.AUTO).delete()
+  
+  # ایجاد بلاک جدید
+  IPBlacklist.objects.create(
+    ip_address=ip,
+    block_type=IPBlockType.AUTO,
+    reason=f"بلاک خودکار - {failed_count} تلاش ناموفق ورود",
+    is_permanent=is_permanent,
+    expires_at=expires_at,
+    failed_attempts=failed_count,
+  )
+
+def block_ip_manual(ip, reason="", is_permanent=False, duration_minutes=None, duration_hours=None, until_date=None):
+  """بلاک دستی IP توسط ادمین"""
+  from .models import IPBlacklist, IPBlockType
+  
+  now = timezone.now()
+  
+  if is_permanent:
+    expires_at = None
+  elif until_date:
+    expires_at = until_date
+  elif duration_hours:
+    expires_at = now + timedelta(hours=duration_hours)
+  elif duration_minutes:
+    expires_at = now + timedelta(minutes=duration_minutes)
+  else:
+    expires_at = now + timedelta(hours=24)  # پیش‌فرض 24 ساعت
+  
+  # حذف بلاک‌های قبلی این IP
+  IPBlacklist.objects.filter(ip_address=ip).delete()
+  
+  # ایجاد بلاک جدید
+  return IPBlacklist.objects.create(
+    ip_address=ip,
+    block_type=IPBlockType.MANUAL,
+    reason=reason or "بلاک دستی توسط مدیر",
+    is_permanent=is_permanent,
+    expires_at=expires_at,
+  )
+
+def unblock_ip(ip):
+  """آنبلاک IP"""
+  from .models import IPBlacklist
+  return IPBlacklist.objects.filter(ip_address=ip).delete()
+
+def is_ip_blocked(ip):
+  """بررسی اینکه آیا IP بلاک شده است"""
+  from .models import IPBlacklist, IPWhitelist
+  
+  # چک whitelist
+  if IPWhitelist.objects.filter(ip_address=ip).exists():
+    return False, None
+  
+  # چک blacklist
+  now = timezone.now()
+  blocked = IPBlacklist.objects.filter(ip_address=ip).first()
+  
+  if blocked:
+    if blocked.is_permanent:
+      return True, blocked
+    elif blocked.expires_at and blocked.expires_at > now:
+      return True, blocked
+    else:
+      # بلاک منقضی شده
+      blocked.delete()
+  
+  return False, None
+
+def cleanup_old_attempts(days=7):
+  """پاکسازی لاگ‌های قدیمی تلاش ورود"""
+  from .models import LoginAttempt
+  cutoff = timezone.now() - timedelta(days=days)
+  return LoginAttempt.objects.filter(attempted_at__lt=cutoff).delete()
+
+def cleanup_expired_blocks():
+  """پاکسازی بلاک‌های منقضی شده"""
+  from .models import IPBlacklist
+  now = timezone.now()
+  return IPBlacklist.objects.filter(
+    is_permanent=False,
+    expires_at__lt=now
+  ).delete()
 PY
 
   cat > app/courses/apps.py <<'PY'
