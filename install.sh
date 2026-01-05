@@ -4349,16 +4349,52 @@ HTML
 <div class="mx-auto max-w-xl space-y-4">
   <!-- Header -->
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-    <h1 class="text-xl font-extrabold mb-2">درخواست شارژ کیف پول</h1>
+    <h1 class="text-xl font-extrabold mb-2">شارژ کیف پول</h1>
     <p class="text-sm text-slate-500 dark:text-slate-400">
-      برای شارژ کیف پول، مبلغ مورد نظر خود را وارد کنید. پس از بررسی توسط مدیر، مبلغ به کیف پول شما اضافه می‌شود.
+      برای شارژ کیف پول، یکی از روش‌های زیر را انتخاب کنید.
     </p>
   </div>
+
+  <!-- Online Payment Gateways -->
+  {% if active_gateways %}
+  <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/40 dark:bg-emerald-950/40">
+    <div class="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-3">💳 شارژ آنلاین (فوری)</div>
+    <form id="online-topup-form" class="space-y-3">
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-emerald-700 dark:text-emerald-300">مبلغ شارژ (تومان)</label>
+        <input type="number" name="online_amount" id="online_amount" min="1000" step="1000" placeholder="مثال: 50000"
+               class="w-full rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-400 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-white" dir="ltr">
+        <p class="text-xs text-emerald-600 dark:text-emerald-400">حداقل ۱,۰۰۰ تومان</p>
+      </div>
+      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {% for gw in active_gateways %}
+        <a href="#" onclick="submitOnlineTopup('{{ gw.gateway_type }}'); return false;"
+           class="flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60">
+          {% if gw.gateway_type == "zarinpal" %}💛{% elif gw.gateway_type == "zibal" %}💙{% elif gw.gateway_type == "idpay" %}💚{% else %}💳{% endif %}
+          {{ gw.get_gateway_type_display }}
+          {% if gw.is_sandbox %}<span class="text-xs text-orange-500">(تست)</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </form>
+  </div>
+
+  <script>
+  function submitOnlineTopup(gatewayType) {
+    var amount = document.getElementById('online_amount').value;
+    if (!amount || parseInt(amount) < 1000) {
+      alert('لطفاً مبلغ شارژ را وارد کنید (حداقل ۱۰۰۰ تومان)');
+      return;
+    }
+    window.location.href = '/wallet/pay/' + gatewayType + '/?amount=' + amount;
+  }
+  </script>
+  {% endif %}
 
   <!-- Bank Info -->
   {% if bank_info %}
   <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-950/40">
-    <div class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">اطلاعات کارت به کارت</div>
+    <div class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">🏦 کارت به کارت (دستی)</div>
     {% if bank_info.card_number %}
     <div class="text-sm text-blue-700 dark:text-blue-300 mb-1">
       <span class="font-medium">شماره کارت:</span>
@@ -4379,8 +4415,9 @@ HTML
   </div>
   {% endif %}
 
-  <!-- Form -->
+  <!-- Manual Form -->
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <div class="text-sm font-semibold mb-4 text-slate-700 dark:text-slate-300">📝 درخواست شارژ دستی (پس از کارت به کارت)</div>
     <form method="post" enctype="multipart/form-data" class="space-y-5">{% csrf_token %}
       {% include "partials/form_errors.html" %}
       
@@ -4440,8 +4477,8 @@ HTML
         </div>
       </details>
 
-      <button class="w-full rounded-xl bg-emerald-600 px-4 py-3 text-white font-semibold hover:bg-emerald-700 transition-colors">
-        ثبت درخواست شارژ
+      <button class="w-full rounded-xl bg-slate-700 px-4 py-3 text-white font-semibold hover:bg-slate-800 transition-colors">
+        ثبت درخواست شارژ دستی
       </button>
     </form>
   </div>
