@@ -6298,13 +6298,21 @@ backup_db(){
   require_root
   [[ -f "$ENV_FILE" ]] || die ".env not found"
   set -a; . "$ENV_FILE"; set +a
-  cd "$APP_DIR"
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   mkdir -p "$BACKUP_DIR"
-  docker compose up -d db >/dev/null
+  echo "Starting database container if not running..."
+  docker compose up -d db >/dev/null 2>&1 || true
+  # Wait for DB to be ready
+  sleep 3
   local ts file; ts="$(date +%Y%m%d-%H%M%S)"; file="${BACKUP_DIR}/${DB_NAME}-${ts}.sql"
-  docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysqldump -uroot --databases \"${DB_NAME}\" --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF" > "$file"
-  chmod 600 "$file"
-  echo "Backup: $file"
+  echo "Creating backup..."
+  if docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysqldump -uroot --databases \"${DB_NAME}\" --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF" > "$file"; then
+    chmod 600 "$file"
+    echo "✅ Backup created: $file"
+  else
+    rm -f "$file" 2>/dev/null || true
+    die "Backup failed"
+  fi
 }
 
 restore_db(){
