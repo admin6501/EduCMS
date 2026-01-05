@@ -6283,9 +6283,16 @@ do_start(){
 
 do_stop(){ 
   cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
+  echo "Stopping containers..."
   docker compose down --remove-orphans || true
+  echo "✅ Stopped successfully."
 }
-do_restart(){ cd "$APP_DIR" && docker compose up -d --build; }
+do_restart(){ 
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
+  echo "Restarting containers..."
+  docker compose up -d --build
+  echo "✅ Restarted successfully."
+}
 
 backup_db(){
   require_root
