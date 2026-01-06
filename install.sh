@@ -2097,6 +2097,12 @@ def backup_management(request):
   import pytz
   tehran_tz = pytz.timezone('Asia/Tehran')
   
+  # Get site settings for brand name
+  try:
+    site_settings = SiteSetting.objects.first()
+  except Exception:
+    site_settings = None
+  
   # Get list of backups
   backups = []
   if os.path.exists(BACKUP_DIR):
@@ -2114,7 +2120,7 @@ def backup_management(request):
       })
     backups.sort(key=lambda x: x["date"], reverse=True)
   
-  return render(request, "settings/backup.html", {"backups": backups})
+  return render(request, "settings/backup.html", {"backups": backups, "site_settings": site_settings})
 
 @staff_member_required
 def backup_create(request):
