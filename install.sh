@@ -7633,7 +7633,8 @@ main(){
         restore_db "${2}"
         ;;
       change-domain) change_domain ;;
-      *) echo "Usage: $0 [install|start|patch|stop|restart|uninstall|backup|restore /path/file.sql|change-domain]" ; exit 1 ;;
+      change-password) change_admin_password ;;
+      *) echo "Usage: $0 [install|start|patch|stop|restart|uninstall|backup|restore /path/file.sql|change-domain|change-password]" ; exit 1 ;;
     esac
     exit 0
   fi
