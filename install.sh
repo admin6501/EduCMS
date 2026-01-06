@@ -2923,9 +2923,12 @@ class Course(models.Model):
   
   def get_features_list(self):
     """تبدیل ویژگی‌ها به لیست"""
-    if not self.features:
+    try:
+      if not self.features:
+        return []
+      return [f.strip() for f in self.features.strip().split('\n') if f.strip()]
+    except Exception:
       return []
-    return [f.strip() for f in self.features.strip().split('\n') if f.strip()]
 
   def __str__(self): return self.title
 
