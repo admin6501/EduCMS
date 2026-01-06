@@ -3359,7 +3359,7 @@ def pay_online_wallet(request, gateway_type):
     messages.error(request, "درگاه پرداخت یافت نشد یا غیرفعال است.")
     return redirect("wallet_topup")
   
-  callback_url = request.build_absolute_uri(f"/wallet/callback/{gateway_type}/")
+  callback_url = get_callback_url(request, f"/wallet/callback/{gateway_type}/")
   description = f"شارژ کیف پول - {request.user.email}"
   
   # ایجاد رکورد پرداخت آنلاین
