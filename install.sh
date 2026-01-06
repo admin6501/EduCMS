@@ -127,16 +127,29 @@ cleanup_old(){
     (cd "$APP_DIR" && docker compose down --remove-orphans --volumes) || true
   fi
   if [[ -d "$APP_DIR" ]]; then
-    echo "Removing old installation (preserving backups)..."
-    # Preserve backups folder
-    if [[ -d "$BACKUP_DIR" ]]; then
-      mv "$BACKUP_DIR" /tmp/educms_backups_temp || true
+    # Check if backups exist and warn user
+    if [[ -d "$BACKUP_DIR" ]] && ls "$BACKUP_DIR"/*.sql 1>/dev/null 2>&1; then
+      echo ""
+      echo "⚠️  WARNING: Backup files found in ${BACKUP_DIR}"
+      echo "   These backups will be PERMANENTLY DELETED!"
+      echo ""
+      ls -la "$BACKUP_DIR"/*.sql 2>/dev/null || true
+      echo ""
+      read -r -p "Type DELETE to remove backups, or anything else to keep them: " ans </dev/tty || true
+      if [[ "${ans:-}" != "DELETE" ]]; then
+        echo "Preserving backups..."
+        mv "$BACKUP_DIR" /tmp/educms_backups_temp || true
+      fi
     fi
+    
+    echo "Removing old installation..."
     rm -rf "$APP_DIR" || true
-    # Restore backups folder
+    
+    # Restore backups if preserved
     if [[ -d /tmp/educms_backups_temp ]]; then
       mkdir -p "$APP_DIR"
       mv /tmp/educms_backups_temp "$BACKUP_DIR" || true
+      echo "✅ Backups preserved in ${BACKUP_DIR}"
     fi
   fi
 }
