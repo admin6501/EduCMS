@@ -5300,31 +5300,204 @@ HTML
 
   cat > app/templates/courses/detail.html <<'HTML'
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}{{ object.title }}{% endblock %}
 {% block content %}
-<div class="grid gap-6 lg:grid-cols-3">
-  <div class="lg:col-span-2 space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      <h1 class="text-2xl font-extrabold mb-2">{{ object.title }}</h1>
-      <div class="text-slate-600 dark:text-slate-300">{{ object.description|linebreaks }}</div>
+<div class="max-w-6xl mx-auto">
+  <!-- Hero Section -->
+  <div class="relative rounded-3xl overflow-hidden mb-8">
+    {% if object.thumbnail %}
+    <div class="absolute inset-0">
+      <img src="{{ object.thumbnail.url }}" alt="{{ object.title }}" class="w-full h-full object-cover">
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-900/95 via-slate-900/70 to-slate-900/30"></div>
+    </div>
+    {% else %}
+    <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500"></div>
+    {% endif %}
+    
+    <div class="relative z-10 px-6 py-12 md:px-12 md:py-20">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        {% if object.category %}
+        <span class="inline-flex items-center gap-1 rounded-full bg-white/20 backdrop-blur-sm px-3 py-1 text-sm text-white">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+          {{ object.category.name }}
+        </span>
+        {% endif %}
+        {% if object.is_free_for_all or not object.price_toman %}
+        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 backdrop-blur-sm px-3 py-1 text-sm text-white font-medium">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          رایگان
+        </span>
+        {% endif %}
+      </div>
+      
+      <h1 class="text-3xl md:text-4xl lg:text-5xl font-black text-white mb-4 leading-tight">{{ object.title }}</h1>
+      
+      <div class="flex flex-wrap items-center gap-4 text-white/80 text-sm">
+        {% if object.instructor %}
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          </div>
+          <span>{{ object.instructor }}</span>
+        </div>
+        {% endif %}
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <span>{{ object.created_at|jalali }}</span>
+        </div>
+      </div>
     </div>
   </div>
-  <aside class="space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      {% if has_access %}
-        <div class="rounded-xl bg-emerald-600 px-4 py-2 text-white text-sm">دسترسی شما فعال است.</div>
-      {% else %}
-        {% if object.is_free_for_all or not object.price_toman %}
-          <div class="rounded-xl bg-emerald-600 px-4 py-2 text-white text-sm">این دوره رایگان است.</div>
-        {% else %}
-          <div class="text-sm text-slate-500 dark:text-slate-300">قیمت</div>
-          <div class="text-2xl font-extrabold mt-1">{{ object.price_toman }} تومان</div>
-          <a class="mt-4 block rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/checkout/{{ object.slug }}/">پرداخت</a>
-          <div class="mt-2 text-xs text-slate-500 dark:text-slate-300">کارت‌به‌کارت یا کیف پول</div>
-        {% endif %}
+
+  <div class="grid gap-8 lg:grid-cols-3">
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Description Card -->
+      <div class="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white">درباره دوره</h2>
+        </div>
+        <div class="prose prose-slate dark:prose-invert max-w-none leading-relaxed text-slate-600 dark:text-slate-300">
+          {{ object.description|linebreaks }}
+        </div>
+      </div>
+
+      <!-- Curriculum/Lessons (if available) -->
+      {% if object.sections.exists %}
+      <div class="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-950">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+          </div>
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white">سرفصل‌های دوره</h2>
+        </div>
+        <div class="space-y-3">
+          {% for section in object.sections.all %}
+          <div class="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+            <h3 class="font-semibold text-slate-900 dark:text-white mb-3">{{ section.title }}</h3>
+            {% if section.lessons.exists %}
+            <ul class="space-y-2">
+              {% for lesson in section.lessons.all %}
+              <li class="flex items-center gap-3 text-sm">
+                <div class="w-6 h-6 rounded-lg {% if lesson.is_free_preview %}bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400{% else %}bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500{% endif %} flex items-center justify-center">
+                  {% if lesson.is_free_preview %}
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+                  {% else %}
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                  {% endif %}
+                </div>
+                <span class="text-slate-600 dark:text-slate-300">{{ lesson.title }}</span>
+                {% if lesson.is_free_preview %}
+                <span class="text-xs text-emerald-600 dark:text-emerald-400">(پیش‌نمایش رایگان)</span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
       {% endif %}
     </div>
-  </aside>
+
+    <!-- Sidebar -->
+    <aside class="space-y-6">
+      <!-- Purchase Card -->
+      <div class="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-lg sticky top-4 dark:border-slate-800 dark:bg-slate-950">
+        {% if has_access %}
+        <div class="text-center py-6">
+          <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+          </div>
+          <h3 class="text-xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">دسترسی فعال</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm">شما به این دوره دسترسی دارید</p>
+          <a href="/dashboard/" class="mt-4 inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3 text-white font-medium hover:bg-emerald-700 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            شروع یادگیری
+          </a>
+        </div>
+        {% else %}
+          {% if object.is_free_for_all or not object.price_toman %}
+          <div class="text-center py-6">
+            <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+              <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div class="inline-block rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300 px-4 py-1 text-sm font-medium mb-3">دوره رایگان</div>
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-2">ثبت‌نام رایگان</h3>
+            <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">این دوره کاملاً رایگان است</p>
+            <a href="/orders/checkout/{{ object.slug }}/" class="block w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-center text-white font-bold hover:opacity-95 transition-opacity shadow-lg shadow-emerald-500/25">
+              ثبت‌نام در دوره
+            </a>
+          </div>
+          {% else %}
+          <div class="text-center mb-6">
+            <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">قیمت دوره</div>
+            <div class="text-4xl font-black text-slate-900 dark:text-white">
+              {{ object.price_toman|stringformat:",.0f"|default:object.price_toman }}
+              <span class="text-lg font-medium text-slate-500 dark:text-slate-400">تومان</span>
+            </div>
+          </div>
+          
+          <a href="/orders/checkout/{{ object.slug }}/" class="block w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 text-center text-white font-bold hover:opacity-95 transition-opacity shadow-lg shadow-indigo-500/25 mb-4">
+            <span class="flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              ثبت‌نام در دوره
+            </span>
+          </a>
+          
+          <div class="flex items-center justify-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+              پرداخت امن
+            </div>
+            <div class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+              <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              دسترسی فوری
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <!-- Course Features -->
+      <div class="rounded-3xl border border-slate-200/80 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+        <h3 class="font-bold text-slate-900 dark:text-white mb-4">ویژگی‌های دوره</h3>
+        <ul class="space-y-3">
+          <li class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+            <div class="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </div>
+            <span>دسترسی نامحدود به محتوا</span>
+          </li>
+          <li class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+            <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center text-purple-600 dark:text-purple-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            </div>
+            <span>قابل مشاهده در موبایل</span>
+          </li>
+          <li class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+            <div class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            </div>
+            <span>پشتیبانی آنلاین</span>
+          </li>
+          <li class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>
+            </div>
+            <span>گواهی پایان دوره</span>
+          </li>
+        </ul>
+      </div>
+    </aside>
+  </div>
 </div>
 {% endblock %}
 HTML
