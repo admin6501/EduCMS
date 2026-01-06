@@ -7500,6 +7500,80 @@ do_uninstall(){
   echo "✅ Uninstalled successfully."
 }
 
+change_admin_password(){
+  require_root; require_tty
+  [[ -d "$APP_DIR" ]] || die "Not installed: $APP_DIR"
+  [[ -f "$ENV_FILE" ]] || die ".env not found: $ENV_FILE"
+  
+  cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
+  set -a; . "$ENV_FILE"; set +a
+  
+  echo ""
+  echo "============================================"
+  echo "🔐 تغییر رمز عبور ادمین"
+  echo "============================================"
+  echo ""
+  
+  # Get admin username
+  local admin_user
+  admin_user="$(read_line "نام کاربری ادمین (پیش‌فرض: admin): ")"
+  [[ -z "$admin_user" ]] && admin_user="admin"
+  
+  # Get new password
+  local new_pass new_pass2
+  new_pass="$(read_secret "رمز عبور جدید: ")"
+  [[ -z "$new_pass" ]] && die "رمز عبور نمی‌تواند خالی باشد"
+  [[ ${#new_pass} -lt 4 ]] && die "رمز عبور باید حداقل ۴ کاراکتر باشد"
+  
+  new_pass2="$(read_secret "تکرار رمز عبور جدید: ")"
+  [[ "$new_pass" != "$new_pass2" ]] && die "رمزهای عبور یکسان نیستند"
+  
+  echo ""
+  echo "در حال تغییر رمز عبور..."
+  
+  # Check if container is running
+  if ! docker compose ps web | grep -q "Up"; then
+    echo "Starting web container..."
+    docker compose up -d web
+    sleep 5
+  fi
+  
+  # Change password using Django management command
+  if docker compose exec -T web python manage.py shell <<PYEOF
+from django.contrib.auth import get_user_model
+User = get_user_model()
+try:
+    user = User.objects.get(username='${admin_user}')
+    user.set_password('${new_pass}')
+    user.save()
+    print('SUCCESS')
+except User.DoesNotExist:
+    # Try by email
+    try:
+        user = User.objects.get(email__iexact='${admin_user}')
+        user.set_password('${new_pass}')
+        user.save()
+        print('SUCCESS')
+    except User.DoesNotExist:
+        print('USER_NOT_FOUND')
+except Exception as e:
+    print(f'ERROR: {e}')
+PYEOF
+  then
+    echo ""
+    echo "✅ رمز عبور با موفقیت تغییر کرد!"
+    echo ""
+    echo "اطلاعات ورود:"
+    echo "  نام کاربری: ${admin_user}"
+    echo "  رمز جدید: [تنظیم شد]"
+    echo ""
+  else
+    echo ""
+    echo "❌ خطا در تغییر رمز عبور"
+    echo "لطفاً مطمئن شوید که سرویس‌ها در حال اجرا هستند."
+  fi
+}
+
 menu_header(){
   clear || true
   echo ""
