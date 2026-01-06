@@ -7344,6 +7344,27 @@ try:
               ON DELETE SET NULL
         ''', "Added FK for courses_lesson.section_id")
 
+    # -------------------------
+    # CourseFeature table (missing table fix)
+    # -------------------------
+    if course_id_type and not table_exists(cursor, 'courses_coursefeature'):
+        safe_exec(cursor, f'''
+            CREATE TABLE courses_coursefeature (
+                id CHAR(36) PRIMARY KEY,
+                title VARCHAR(200) NOT NULL,
+                icon VARCHAR(50) NOT NULL DEFAULT 'check',
+                position INT UNSIGNED NOT NULL DEFAULT 0,
+                course_id {course_id_type}{course_id_extra} NOT NULL,
+                KEY courses_coursefeature_course_id_idx (course_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ''', "Created courses_coursefeature table")
+        safe_exec(cursor, '''
+            ALTER TABLE courses_coursefeature
+              ADD CONSTRAINT courses_coursefeature_course_id_fk
+              FOREIGN KEY (course_id) REFERENCES courses_course(id)
+              ON DELETE CASCADE
+        ''', "Added FK for courses_coursefeature.course_id")
+
     conn.commit()
     cursor.close()
     conn.close()
