@@ -3039,6 +3039,13 @@ class CourseSectionInline(admin.TabularInline):
     ordering = ("position", "id")
 
 
+class CourseFeatureInline(admin.TabularInline):
+    model = CourseFeature
+    extra = 1
+    fields = ("title", "icon", "position")
+    ordering = ("position", "id")
+
+
 class LessonInline(admin.TabularInline):
     model = Lesson
     extra = 0
@@ -3053,7 +3060,7 @@ class CourseAdmin(admin.ModelAdmin):
     search_fields = ("title", "slug", "owner__username")
     prepopulated_fields = {"slug": ("title",)}
     raw_id_fields = ("owner",)
-    inlines = [CourseSectionInline, LessonInline]
+    inlines = [CourseFeatureInline, CourseSectionInline, LessonInline]
 
     def updated_at_display(self, obj):
         return smart_format_datetime(obj.updated_at)
