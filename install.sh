@@ -940,8 +940,9 @@ class RegisterForm(UserCreationForm):
         # Set the queryset dynamically to avoid issues when table doesn't exist
         try:
             self.fields['security_question'].queryset = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Security question queryset error: {e}")
 
         # Add dynamic fields from RegistrationField model
         try:
@@ -952,8 +953,9 @@ class RegisterForm(UserCreationForm):
                 field = build_form_field(reg_field)
                 self.fields[f"custom_{reg_field.field_key}"] = field
                 self._dynamic_fields.append(reg_field.field_key)
-        except Exception:
-            pass  # Database might not be ready during migrations
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Dynamic fields error (may be expected during migrations): {e}")
 
         # Reorder fields
         ordered = ["email", "security_question", "security_answer", "password1", "password2"]
