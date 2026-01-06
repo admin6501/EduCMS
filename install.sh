@@ -2192,7 +2192,6 @@ def backup_delete(request, filename):
 def backup_restore(request, filename):
   """ریستور از فایل بکاپ"""
   if request.method == "POST":
-    import shlex
     import re
     
     # Validate filename - only allow safe characters
@@ -2213,44 +2212,50 @@ def backup_restore(request, filename):
     try:
       db_name = os.getenv("DB_NAME", "educms")
       db_pass = os.getenv("DB_PASSWORD", "")
+      db_host = os.getenv("DB_HOST", "db")
       
       # Validate db_name
       if not db_name.replace("_", "").replace("-", "").isalnum():
         messages.error(request, "نام دیتابیس نامعتبر است")
         return redirect("backup_management")
       
-      # Drop and recreate database
+      # Drop and recreate database using mysql command directly
       drop_sql = f"DROP DATABASE IF EXISTS `{db_name}`; CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
       cmd_drop = [
-        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
-        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
-        "mysql", "-uroot", "-e", drop_sql
+        "mysql",
+        f"-h{db_host}",
+        "-uroot",
+        f"-p{db_pass}",
+        "-e", drop_sql
       ]
-      subprocess.run(cmd_drop, check=True, timeout=60, cwd="/opt/educms")
+      subprocess.run(cmd_drop, check=True, timeout=60, capture_output=True)
       
-      # Restore from file - read file and pipe to mysql
+      # Restore from file using mysql command
       with open(filepath, 'r') as f:
         sql_content = f.read()
       
       cmd_restore = [
-        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
-        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
-        "mysql", "-uroot", db_name
+        "mysql",
+        f"-h{db_host}",
+        "-uroot",
+        f"-p{db_pass}",
+        db_name
       ]
-      result = subprocess.run(cmd_restore, input=sql_content, capture_output=True, text=True, timeout=300, cwd="/opt/educms")
+      result = subprocess.run(cmd_restore, input=sql_content, capture_output=True, text=True, timeout=300)
       
       if result.returncode == 0:
         messages.success(request, f"ریستور با موفقیت انجام شد از: {filename}")
       else:
-        messages.error(request, f"خطا در ریستور: {result.stderr[:200]}")
+        error_msg = result.stderr[:200] if result.stderr else "خطای نامشخص"
+        messages.error(request, f"خطا در ریستور: {error_msg}")
     except subprocess.TimeoutExpired:
       messages.error(request, "عملیات ریستور بیش از حد طول کشید")
+    except FileNotFoundError:
+      messages.error(request, "mysql یافت نشد. لطفاً از طریق خط فرمان ریستور کنید.")
     except Exception as e:
       import logging
       logging.getLogger(__name__).error(f"Backup restore error: {e}")
       messages.error(request, f"خطا: {str(e)[:100]}")
-    except Exception as e:
-      messages.error(request, f"خطا: {str(e)}")
   
   return redirect("backup_management")
 PY
