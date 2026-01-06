@@ -3110,6 +3110,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings as django_settings
 from courses.models import Course, PublishStatus, Enrollment
 from courses.access import user_has_course_access
 from .models import (BankTransferSetting, Order, OrderStatus, Wallet, WalletTopUpRequest, 
@@ -3120,6 +3121,29 @@ from .utils import (validate_coupon, calc_coupon_discount, get_active_gateways,
                     zarinpal_request, zarinpal_redirect_url, zarinpal_verify,
                     zibal_request, zibal_redirect_url, zibal_verify,
                     idpay_request, idpay_redirect_url, idpay_verify)
+
+def get_callback_url(request, path):
+    """ساخت callback URL با دامنه صحیح (از تنظیمات CSRF_TRUSTED_ORIGINS)"""
+    # اول سعی می‌کنیم از CSRF_TRUSTED_ORIGINS استفاده کنیم
+    trusted_origins = getattr(django_settings, 'CSRF_TRUSTED_ORIGINS', [])
+    if trusted_origins:
+        # اولین origin که https باشد را انتخاب می‌کنیم
+        for origin in trusted_origins:
+            if origin.startswith('https://'):
+                return f"{origin.rstrip('/')}{path}"
+    
+    # اگر نبود، از ALLOWED_HOSTS استفاده کنیم
+    allowed_hosts = getattr(django_settings, 'ALLOWED_HOSTS', [])
+    if allowed_hosts:
+        host = allowed_hosts[0]
+        if host and host not in ('*', 'localhost', '127.0.0.1'):
+            return f"https://{host}{path}"
+    
+    # در نهایت از request استفاده کنیم ولی https را force کنیم
+    url = request.build_absolute_uri(path)
+    if url.startswith('http://'):
+        url = url.replace('http://', 'https://', 1)
+    return url
 
 def ensure_invoice(order:Order):
   if hasattr(order,"invoice"): return order.invoice
