@@ -7465,7 +7465,11 @@ do_uninstall(){
   echo "  - Application directory: ${APP_DIR}"
   echo "  - All Docker containers and volumes"
   echo "  - All database data"
+  echo "  - All backups in: ${BACKUP_DIR}"
   echo "============================================"
+  echo ""
+  echo "💡 TIP: Download your backups before uninstalling!"
+  echo ""
   read -r -p "Type YES to continue: " ans </dev/tty || true
   [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
   
