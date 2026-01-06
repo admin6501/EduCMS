@@ -1653,7 +1653,7 @@ def get_calendar_type():
         from settingsapp.models import SiteSetting
         setting = SiteSetting.objects.first()
         return setting.calendar_type if setting else 'jalali'
-    except:
+    except Exception:
         return 'jalali'
 
 def to_persian_num(num):
@@ -1670,7 +1670,7 @@ def convert_to_tehran(value):
             return value.astimezone(TEHRAN_TZ)
         else:
             return pytz.utc.localize(value).astimezone(TEHRAN_TZ)
-    except:
+    except Exception:
         return value
 
 def smart_format_datetime(value, include_time=True):
@@ -1692,7 +1692,7 @@ def smart_format_datetime(value, include_time=True):
                 return to_persian_num(f"{jdate.day} {PERSIAN_MONTHS[jdate.month-1]} {jdate.year} - {jdate.hour:02d}:{jdate.minute:02d}")
             else:
                 return to_persian_num(f"{jdate.day} {PERSIAN_MONTHS[jdate.month-1]} {jdate.year}")
-    except:
+    except Exception:
         return str(value)
 
 def smart_format_date(value):
