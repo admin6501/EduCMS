@@ -2324,6 +2324,7 @@ from django.http import HttpResponseNotFound, HttpResponseForbidden
 from django.utils.deprecation import MiddlewareMixin
 from django.core.cache import cache
 from django.utils import timezone
+from django.contrib import admin
 from datetime import timedelta
 from .models import SiteSetting
 
