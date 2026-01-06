@@ -1033,8 +1033,9 @@ class ProfileForm(forms.Form):
                     extra_data = getattr(profile, 'extra_data', None) or {}
                     if reg_field.field_key in extra_data:
                         self.initial[field_name] = extra_data[reg_field.field_key]
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Profile form dynamic fields error: {e}")
 
     def get_custom_field_data(self):
         """Return a dict of custom field values"""
