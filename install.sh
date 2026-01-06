@@ -5049,17 +5049,24 @@ PY
 
   cat > app/templates/partials/form_errors.html <<'HTML'
 {% if form.non_field_errors %}
-  <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200">
-    {{ form.non_field_errors }}
+  <div class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-900/30">
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-800 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4 text-rose-600 dark:text-rose-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <div class="text-sm text-rose-700 dark:text-rose-200">{{ form.non_field_errors }}</div>
+    </div>
   </div>
 {% endif %}
 HTML
   cat > app/templates/partials/field.html <<'HTML'
-<div class="space-y-1">
-  <label class="text-sm font-medium">{{ field.label }}</label>
-  {{ field }}
-  {% if field.help_text %}<div class="text-xs text-slate-500 dark:text-slate-300">{{ field.help_text }}</div>{% endif %}
-  {% if field.errors %}<div class="text-xs text-rose-600 dark:text-rose-300">{{ field.errors }}</div>{% endif %}
+<div class="space-y-2">
+  <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300">{{ field.label }}{% if field.field.required %}<span class="text-rose-500 mr-1">*</span>{% endif %}</label>
+  <div class="relative">
+    {{ field }}
+  </div>
+  {% if field.help_text %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ field.help_text }}</p>{% endif %}
+  {% if field.errors %}<p class="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>{{ field.errors }}</p>{% endif %}
 </div>
 HTML
 
