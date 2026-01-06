@@ -6702,34 +6702,67 @@ HTML
 {% load jalali_tags %}
 {% block title %}تیکت‌ها{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-4xl space-y-4">
-  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950 flex items-center justify-between">
-    <h1 class="text-xl font-extrabold">تیکت‌ها</h1>
-    <a class="rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/tickets/new/">ثبت تیکت</a>
+<div class="mx-auto max-w-4xl space-y-6">
+  <!-- Header -->
+  <div class="rounded-3xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 p-8 text-white">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-black mb-1">پشتیبانی</h1>
+        <p class="text-white/80">سوالی دارید؟ ما اینجاییم تا کمک کنیم</p>
+      </div>
+      <a class="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-amber-600 font-bold hover:bg-white/90 transition-colors shadow-lg" href="/tickets/new/">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+        ثبت تیکت جدید
+      </a>
+    </div>
   </div>
-  <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-    <div class="space-y-3 text-sm">
+
+  <!-- Tickets List -->
+  <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="space-y-3">
       {% for t in tickets %}
-        <a class="block rounded-2xl border border-slate-200 p-4 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/tickets/{{ t.id }}/">
-          <div class="flex items-center justify-between mb-2">
-            <div class="font-semibold">{{ t.subject }}</div>
-            <div class="flex items-center gap-2">
-              {% if t.priority == 'high' %}
-                <span class="px-2 py-0.5 rounded-full text-xs bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300">فوری</span>
-              {% elif t.priority == 'medium' %}
-                <span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">متوسط</span>
-              {% else %}
-                <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">عادی</span>
-              {% endif %}
-              <span class="px-2 py-0.5 rounded-full text-xs {% if t.status == 'open' %}bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300{% elif t.status == 'answered' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300{% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ t.get_status_display }}</span>
-            </div>
+      <a class="block rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:border-amber-200 hover:bg-amber-50/50 dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-amber-800 dark:hover:bg-amber-900/20 transition-all" href="/tickets/{{ t.id }}/">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-slate-900 dark:text-white truncate">{{ t.subject }}</h3>
+            {% if t.department %}
+            <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ t.department.name }}</div>
+            {% endif %}
           </div>
-          <div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-            {% if t.department %}<span>📁 {{ t.department.name }}</span>{% endif %}
-            <span>{{ t.created_at|jalali_datetime }}</span>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            {% if t.priority == 'high' %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300">فوری</span>
+            {% elif t.priority == 'medium' %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">متوسط</span>
+            {% else %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">عادی</span>
+            {% endif %}
+            <span class="px-3 py-1 rounded-full text-xs font-bold 
+              {% if t.status == 'open' %}bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300
+              {% elif t.status == 'answered' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300
+              {% else %}bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400{% endif %}">
+              {{ t.get_status_display }}
+            </span>
           </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="text-xs text-slate-500 dark:text-slate-400">{{ t.created_at|jalali_datetime }}</div>
+          <span class="text-sm text-amber-600 dark:text-amber-400 font-medium">مشاهده →</span>
+        </div>
+      </a>
+      {% empty %}
+      <div class="text-center py-12">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+        </div>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">تیکتی ثبت نشده</h3>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">اگر سوالی دارید، یک تیکت جدید ثبت کنید</p>
+        <a class="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-white font-medium hover:bg-amber-600 transition-colors" href="/tickets/new/">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+          ثبت تیکت
         </a>
-      {% empty %}<div class="text-slate-500 dark:text-slate-300">تیکتی ندارید.</div>{% endfor %}
+      </div>
+      {% endfor %}
     </div>
   </div>
 </div>
