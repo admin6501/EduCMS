@@ -4965,7 +4965,7 @@ def ticket_list(request):
 
 @login_required
 def ticket_create(request):
-  form=TicketCreateForm(request.POST or None, request.FILES or None, user=request.user)
+  form=TicketCreateForm(request.POST or None, request.FILES or None)
   if request.method=="POST" and form.is_valid():
     t=form.save(commit=False); t.user=request.user; t.status=TicketStatus.OPEN; t.save()
     messages.success(request,"تیکت ثبت شد.")
