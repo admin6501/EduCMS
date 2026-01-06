@@ -158,7 +158,7 @@ ensure_dirs(){
   mkdir -p "$APP_DIR" "$BACKUP_DIR"
   cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   mkdir -p app/{educms,accounts,courses,settingsapp,payments,tickets,dashboard} \
-           app/templates/{accounts,courses,orders,tickets,settings,dashboard,wallet,invoices,partials} \
+           app/templates/{accounts,courses,orders,tickets,settings,dashboard,wallet,invoices,partials,admin} \
            app/static app/media app/staticfiles nginx certbot/www
 }
 
