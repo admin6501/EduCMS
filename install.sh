@@ -6319,69 +6319,95 @@ HTML
 {% load jalali_tags %}
 {% block title %}کیف پول{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-4xl space-y-4">
+<div class="mx-auto max-w-4xl space-y-6">
   <!-- Balance Card -->
-  <div class="rounded-2xl border border-slate-200 bg-gradient-to-l from-emerald-50 to-white p-6 dark:border-slate-800 dark:from-emerald-950/30 dark:to-slate-950" data-testid="wallet-card">
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div>
-        <h1 class="text-xl font-extrabold mb-1">کیف پول</h1>
-        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="wallet-balance-display">
-          {{ wallet.balance|default:0 }}
-          <span class="text-sm font-normal text-slate-500 dark:text-slate-400">تومان</span>
+  <div class="rounded-3xl overflow-hidden shadow-xl" data-testid="wallet-card">
+    <div class="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 p-8 text-white">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 text-white/80 text-sm mb-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+            موجودی کیف پول
+          </div>
+          <div class="text-4xl font-black" data-testid="wallet-balance-display">
+            {{ wallet.balance|stringformat:",.0f"|default:0 }}
+            <span class="text-lg font-normal text-white/70">تومان</span>
+          </div>
         </div>
+        <a class="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 text-emerald-600 font-bold hover:bg-white/90 transition-colors shadow-lg" href="/wallet/topup/" data-testid="topup-btn">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+          شارژ کیف پول
+        </a>
       </div>
-      <a class="rounded-xl bg-emerald-600 px-5 py-2.5 text-white font-semibold hover:bg-emerald-700 transition-colors" href="/wallet/topup/" data-testid="topup-btn">
-        + درخواست شارژ
-      </a>
     </div>
   </div>
 
-  <div class="grid gap-4 lg:grid-cols-2">
+  <div class="grid gap-6 lg:grid-cols-2">
     <!-- Transactions -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="transactions-section">
-      <h2 class="font-bold mb-3">تراکنش‌ها</h2>
-      <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
+    <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900" data-testid="transactions-section">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+        </div>
+        <h2 class="font-bold text-slate-900 dark:text-white">تراکنش‌ها</h2>
+      </div>
+      <div class="space-y-3 max-h-96 overflow-y-auto">
         {% for t in txns %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800" data-testid="transaction-item">
-            <div class="flex items-center justify-between">
-              <div class="text-slate-600 dark:text-slate-300">{{ t.get_kind_display }}</div>
-              <div class="font-bold {% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}" data-testid="transaction-amount">
-                {% if t.amount >= 0 %}+{% endif %}{{ t.amount }} تومان
-              </div>
-            </div>
-            {% if t.description %}
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ t.description }}</div>
-            {% endif %}
-            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ t.created_at|jalali_datetime }}</div>
+        <div class="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/50" data-testid="transaction-item">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm text-slate-600 dark:text-slate-400">{{ t.get_kind_display }}</span>
+            <span class="font-bold text-lg {% if t.amount >= 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-rose-600 dark:text-rose-400{% endif %}" data-testid="transaction-amount">
+              {% if t.amount >= 0 %}+{% endif %}{{ t.amount|stringformat:",.0f"|default:t.amount }}
+            </span>
           </div>
+          {% if t.description %}
+          <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{ t.description }}</div>
+          {% endif %}
+          <div class="text-xs text-slate-400 dark:text-slate-500">{{ t.created_at|jalali_datetime }}</div>
+        </div>
         {% empty %}
-          <div class="text-slate-500 dark:text-slate-400 text-center py-4" data-testid="no-transactions">تراکنشی ندارید.</div>
+        <div class="text-center py-8">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+          </div>
+          <p class="text-slate-500 dark:text-slate-400" data-testid="no-transactions">تراکنشی ثبت نشده</p>
+        </div>
         {% endfor %}
       </div>
     </div>
 
     <!-- Top-up Requests -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="topup-requests-section">
-      <h2 class="font-bold mb-3">درخواست‌های شارژ</h2>
-      <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
+    <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900" data-testid="topup-requests-section">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+          <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        </div>
+        <h2 class="font-bold text-slate-900 dark:text-white">درخواست‌های شارژ</h2>
+      </div>
+      <div class="space-y-3 max-h-96 overflow-y-auto">
         {% for r in topups %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800" data-testid="topup-request-item">
-            <div class="flex items-center justify-between">
-              <div class="font-bold">{{ r.amount }} تومان</div>
-              <div class="px-2 py-0.5 rounded-lg text-xs font-medium
-                {% if r.status == 'approved' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300
-                {% elif r.status == 'rejected' %}bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300
-                {% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300{% endif %}">
-                {{ r.get_status_display }}
-              </div>
-            </div>
-            {% if r.note %}
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ r.note|truncatechars:50 }}</div>
-            {% endif %}
-            <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ r.created_at|jalali_datetime }}</div>
+        <div class="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/50" data-testid="topup-request-item">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-bold text-slate-900 dark:text-white">{{ r.amount|stringformat:",.0f"|default:r.amount }} تومان</span>
+            <span class="px-3 py-1 rounded-full text-xs font-bold
+              {% if r.status == 'approved' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300
+              {% elif r.status == 'rejected' %}bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300
+              {% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300{% endif %}">
+              {{ r.get_status_display }}
+            </span>
           </div>
+          {% if r.note %}
+          <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{ r.note|truncatechars:50 }}</div>
+          {% endif %}
+          <div class="text-xs text-slate-400 dark:text-slate-500">{{ r.created_at|jalali_datetime }}</div>
+        </div>
         {% empty %}
-          <div class="text-slate-500 dark:text-slate-400 text-center py-4">درخواستی ندارید.</div>
+        <div class="text-center py-8">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          </div>
+          <p class="text-slate-500 dark:text-slate-400">درخواست شارژی ثبت نشده</p>
+        </div>
         {% endfor %}
       </div>
     </div>
