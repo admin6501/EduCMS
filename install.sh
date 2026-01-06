@@ -1750,8 +1750,9 @@ try:
         list_display = ("label", "field_key", "field_type", "order")
         search_fields = ("field_key", "label")
         ordering = ("order",)
-except Exception:
-    pass
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).debug(f"RegistrationField admin registration skipped: {e}")
 
 # ==================== IP SECURITY ADMIN ====================
 
