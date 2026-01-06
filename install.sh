@@ -1327,8 +1327,9 @@ def qr_public_profile(request, token):
     site_setting = SiteSetting.objects.first()
     if site_setting and not site_setting.qr_feature_enabled:
       return render(request, "accounts/qr_disabled.html", {"message": "قابلیت QR Code غیرفعال است."})
-  except Exception:
-    pass
+  except Exception as e:
+    import logging
+    logging.getLogger(__name__).debug(f"QR public profile setting check error: {e}")
 
   try:
     profile = UserProfile.objects.select_related("user").get(qr_token=token)
