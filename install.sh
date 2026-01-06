@@ -7238,7 +7238,8 @@ backup_db(){
   
   echo "Creating backup..."
   # Note: --set-gtid-purged is not supported in MariaDB
-  if docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysqldump -uroot --databases "${DB_NAME}" --single-transaction --quick --routines --triggers --events > "$file" 2>/dev/null; then
+  # --ssl-mode=DISABLED to avoid self-signed certificate issues
+  if docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysqldump -uroot --ssl-mode=DISABLED --databases "${DB_NAME}" --single-transaction --quick --routines --triggers --events > "$file" 2>/dev/null; then
     if [[ -s "$file" ]]; then
       chmod 600 "$file"
       echo "✅ Backup created: $file"
