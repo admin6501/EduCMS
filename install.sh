@@ -3013,7 +3013,7 @@ PY
   cat > app/courses/admin.py <<'PY'
 from django.contrib import admin
 from .models import (
-    Course, Enrollment, CourseGrant,
+    Course, Enrollment, CourseGrant, CourseFeature,
     CourseCategory, CourseSection, Lesson
 )
 from settingsapp.date_utils import smart_format_datetime
