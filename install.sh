@@ -391,7 +391,7 @@ def gregorian_date(value, fmt='date'):
     try:
         value = convert_to_tehran(value)
         return format_gregorian(value, fmt)
-    except:
+    except Exception:
         return str(value)
 
 @register.filter(name='jalali_short')
