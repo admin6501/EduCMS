@@ -375,7 +375,7 @@ def smart_date(value, fmt='date'):
         if cal_type == 'gregorian':
             return format_gregorian(value, fmt)
         return format_jalali(value, fmt)
-    except:
+    except Exception:
         return str(value)
 
 @register.filter(name='jalali')
