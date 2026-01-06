@@ -7656,7 +7656,8 @@ main(){
   restore_db "$p"
   ;;
 8) change_domain ;;
-9) do_uninstall ;;
+9) change_admin_password ;;
+10) do_uninstall ;;
 0) echo "Bye." ; exit 0 ;;
 *) echo "Invalid option." ;;
     esac
