@@ -6878,6 +6878,27 @@ HTML
 {% endblock %}
 HTML
 
+  # Custom admin base_site template to show dynamic brand name
+  cat > app/templates/admin/base_site.html <<'HTML'
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ site_settings.brand_name|default:"پنل مدیریت" }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+  <a href="{% url 'admin:index' %}">
+    {% if site_settings.logo %}
+    <img src="{{ site_settings.logo.url }}" alt="{{ site_settings.brand_name }}" style="height: 32px; vertical-align: middle; margin-left: 8px;">
+    {% endif %}
+    پنل مدیریت {{ site_settings.brand_name|default:"" }}
+  </a>
+</h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+HTML
+
   cat > app/templates/settings/admin_account.html <<'HTML'
 {% extends "admin/base_site.html" %}
 {% block content %}
