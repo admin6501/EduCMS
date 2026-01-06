@@ -5554,35 +5554,36 @@ HTML
 {% extends "base.html" %}
 {% block title %}پرداخت{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-2xl space-y-4">
+<div class="mx-auto max-w-2xl space-y-4" data-testid="checkout-page">
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-    <h1 class="text-xl font-bold">پرداخت</h1>
-    <div class="text-sm text-slate-500 dark:text-slate-300">دوره: <b>{{ course.title }}</b></div>
+    <h1 class="text-xl font-bold" data-testid="checkout-title">پرداخت</h1>
+    <div class="text-sm text-slate-500 dark:text-slate-300">دوره: <b data-testid="course-title">{{ course.title }}</b></div>
   </div>
 
   <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950 space-y-4">
-    <form method="post" class="space-y-3">{% csrf_token %}
+    <form method="post" class="space-y-3" data-testid="coupon-form">{% csrf_token %}
       <div class="text-sm font-semibold">کد تخفیف</div>
       <div class="flex gap-2">
         <div class="flex-1">{{ coupon_form.coupon_code }}</div>
-        <button name="apply_coupon" value="1" class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900">اعمال</button>
+        <button name="apply_coupon" value="1" class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-900" data-testid="apply-coupon-btn">اعمال</button>
       </div>
       <div class="text-xs text-slate-500 dark:text-slate-300">{% if first_purchase_eligible %}در صورت عدم وارد کردن کد، ممکن است تخفیف خرید اول اعمال شود.{% endif %}</div>
     </form>
 
-    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900/40">
-      پایه: <b>{{ order.amount }}</b> | تخفیف: <b>{{ order.discount_amount }}</b> {% if discount_label %}({{ discount_label }}){% endif %} |
-      نهایی: <b>{{ order.final_amount }}</b> تومان
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900/40" data-testid="order-summary">
+      پایه: <b data-testid="base-amount">{{ order.amount }}</b> | تخفیف: <b data-testid="discount-amount">{{ order.discount_amount }}</b> {% if discount_label %}({{ discount_label }}){% endif %} |
+      نهایی: <b data-testid="final-amount">{{ order.final_amount }}</b> تومان
     </div>
 
     <!-- درگاه‌های پرداخت آنلاین -->
     {% if active_gateways %}
-    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/40">
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/40" data-testid="online-payment-section">
       <div class="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-3">💳 پرداخت آنلاین</div>
       <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {% for gw in active_gateways %}
         <a href="/orders/pay/{{ order.id }}/{{ gw.gateway_type }}/" 
-           class="flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60">
+           class="flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-white px-4 py-3 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60"
+           data-testid="gateway-{{ gw.gateway_type }}">
           {% if gw.gateway_type == "zarinpal" %}💛{% elif gw.gateway_type == "zibal" %}💙{% elif gw.gateway_type == "idpay" %}💚{% else %}💳{% endif %}
           {{ gw.get_gateway_type_display }}
           {% if gw.is_sandbox %}<span class="text-xs text-orange-500">(تست)</span>{% endif %}
@@ -5593,21 +5594,21 @@ HTML
     {% endif %}
 
     <div class="grid gap-3 md:grid-cols-2">
-      <a class="rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/receipt/{{ order.id }}/">آپلود رسید کارت‌به‌کارت</a>
-      <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+      <a class="rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/orders/receipt/{{ order.id }}/" data-testid="upload-receipt-btn">آپلود رسید کارت‌به‌کارت</a>
+      <div class="rounded-2xl border border-slate-200 p-4 dark:border-slate-800" data-testid="wallet-payment-section">
         <div class="text-sm font-semibold">پرداخت با کیف پول</div>
-        <div class="text-sm text-slate-500 dark:text-slate-300 mt-1">موجودی: <b>{{ wallet.balance }}</b> تومان</div>
-        <form method="post" class="mt-3">{% csrf_token %}
-          <button name="pay_wallet" value="1" class="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-95">پرداخت با کیف پول</button>
+        <div class="text-sm text-slate-500 dark:text-slate-300 mt-1">موجودی: <b data-testid="wallet-balance">{{ wallet.balance }}</b> تومان</div>
+        <form method="post" class="mt-3" data-testid="wallet-payment-form">{% csrf_token %}
+          <button name="pay_wallet" value="1" class="w-full rounded-xl bg-emerald-600 px-4 py-2 text-white hover:opacity-95" data-testid="pay-with-wallet-btn">پرداخت با کیف پول</button>
         </form>
       </div>
     </div>
 
     {% if setting %}
-    <div class="rounded-2xl border border-slate-200 p-4 text-sm dark:border-slate-800">
+    <div class="rounded-2xl border border-slate-200 p-4 text-sm dark:border-slate-800" data-testid="bank-transfer-info">
       <div class="font-semibold mb-1">اطلاعات کارت (کارت به کارت)</div>
       نام: <b>{{ setting.account_holder|default:"-" }}</b><br>
-      کارت: <b dir="ltr">{{ setting.card_number|default:"-" }}</b>
+      کارت: <b dir="ltr" data-testid="card-number">{{ setting.card_number|default:"-" }}</b>
       {% if setting.note %}<div class="mt-2 text-xs text-slate-500 dark:text-slate-300">{{ setting.note }}</div>{% endif %}
     </div>
     {% endif %}
