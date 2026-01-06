@@ -2221,167 +2221,383 @@ class IPSecurityMiddleware(MiddlewareMixin):
 PY
 
   cat > app/settingsapp/ip_security.py <<'PY'
-"""توابع کمکی برای سیستم امنیت IP"""
+"""
+سیستم امنیت IP - نسخه ریفکتور شده
+با استفاده از Service Class و Caching
+"""
 from django.utils import timezone
-from datetime import timedelta, datetime
+from django.core.cache import cache
+from datetime import timedelta
+from typing import Optional, Tuple
+import logging
+
+logger = logging.getLogger(__name__)
+
+# ========== CACHE KEYS ==========
+CACHE_WHITELIST_KEY = "ip_security:whitelist:{ip}"
+CACHE_BLACKLIST_KEY = "ip_security:blacklist:{ip}"
+CACHE_SETTINGS_KEY = "ip_security:settings"
+CACHE_TIMEOUT = 60  # 60 seconds
+
+
+class IPSecurityService:
+    """
+    سرویس یکپارچه مدیریت امنیت IP
+    با پشتیبانی از Caching و Rate Limiting
+    """
+    
+    # ========== UTILITIES ==========
+    
+    @staticmethod
+    def get_client_ip(request) -> str:
+        """دریافت IP واقعی کاربر با پشتیبانی از پراکسی"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            # اولین IP در لیست، IP واقعی کاربر است
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+        return ip
+    
+    @staticmethod
+    def get_user_agent(request) -> str:
+        """دریافت User Agent با محدودیت طول"""
+        return request.META.get('HTTP_USER_AGENT', '')[:500]
+    
+    # ========== SETTINGS ==========
+    
+    @classmethod
+    def get_settings(cls):
+        """دریافت تنظیمات با کش"""
+        settings = cache.get(CACHE_SETTINGS_KEY)
+        if settings is None:
+            from .models import IPSecuritySetting
+            settings = IPSecuritySetting.get_settings()
+            cache.set(CACHE_SETTINGS_KEY, settings, CACHE_TIMEOUT)
+        return settings
+    
+    @classmethod
+    def clear_settings_cache(cls):
+        """پاک کردن کش تنظیمات"""
+        cache.delete(CACHE_SETTINGS_KEY)
+    
+    # ========== WHITELIST ==========
+    
+    @classmethod
+    def is_whitelisted(cls, ip: str) -> bool:
+        """بررسی وجود IP در whitelist با کش"""
+        cache_key = CACHE_WHITELIST_KEY.format(ip=ip)
+        result = cache.get(cache_key)
+        
+        if result is None:
+            from .models import IPWhitelist
+            result = IPWhitelist.objects.filter(ip_address=ip).exists()
+            cache.set(cache_key, result, CACHE_TIMEOUT * 5)  # کش طولانی‌تر برای whitelist
+        
+        return result
+    
+    @classmethod
+    def add_to_whitelist(cls, ip: str, description: str = "") -> 'IPWhitelist':
+        """اضافه کردن IP به whitelist"""
+        from .models import IPWhitelist
+        obj, created = IPWhitelist.objects.get_or_create(
+            ip_address=ip,
+            defaults={"description": description}
+        )
+        # پاک کردن کش
+        cache.delete(CACHE_WHITELIST_KEY.format(ip=ip))
+        cache.delete(CACHE_BLACKLIST_KEY.format(ip=ip))
+        return obj
+    
+    @classmethod
+    def remove_from_whitelist(cls, ip: str) -> int:
+        """حذف IP از whitelist"""
+        from .models import IPWhitelist
+        count, _ = IPWhitelist.objects.filter(ip_address=ip).delete()
+        cache.delete(CACHE_WHITELIST_KEY.format(ip=ip))
+        return count
+    
+    # ========== BLACKLIST ==========
+    
+    @classmethod
+    def is_blocked(cls, ip: str) -> Tuple[bool, Optional['IPBlacklist']]:
+        """بررسی بلاک بودن IP با کش"""
+        # اول whitelist چک شود
+        if cls.is_whitelisted(ip):
+            return False, None
+        
+        cache_key = CACHE_BLACKLIST_KEY.format(ip=ip)
+        cached = cache.get(cache_key)
+        
+        if cached is not None:
+            if cached == "not_blocked":
+                return False, None
+            # cached contains block info
+            from .models import IPBlacklist
+            try:
+                blocked = IPBlacklist.objects.get(pk=cached)
+                if blocked.is_active():
+                    return True, blocked
+                else:
+                    # منقضی شده - حذف
+                    blocked.delete()
+                    cache.delete(cache_key)
+                    return False, None
+            except IPBlacklist.DoesNotExist:
+                cache.delete(cache_key)
+        
+        # کش نبود - از دیتابیس بخوان
+        from .models import IPBlacklist
+        blocked = IPBlacklist.objects.filter(ip_address=ip).first()
+        
+        if blocked:
+            if blocked.is_active():
+                cache.set(cache_key, blocked.pk, CACHE_TIMEOUT)
+                return True, blocked
+            else:
+                # منقضی شده
+                blocked.delete()
+        
+        cache.set(cache_key, "not_blocked", CACHE_TIMEOUT)
+        return False, None
+    
+    @classmethod
+    def block_ip(cls, ip: str, reason: str = "", is_permanent: bool = False,
+                 duration_minutes: int = None, duration_hours: int = None,
+                 block_type: str = "manual") -> 'IPBlacklist':
+        """بلاک کردن IP"""
+        from .models import IPBlacklist, IPBlockType
+        
+        now = timezone.now()
+        
+        # محاسبه زمان انقضا
+        if is_permanent:
+            expires_at = None
+        elif duration_hours:
+            expires_at = now + timedelta(hours=duration_hours)
+        elif duration_minutes:
+            expires_at = now + timedelta(minutes=duration_minutes)
+        else:
+            expires_at = now + timedelta(hours=24)  # پیش‌فرض
+        
+        # حذف بلاک‌های قبلی
+        IPBlacklist.objects.filter(ip_address=ip).delete()
+        
+        # ایجاد بلاک جدید
+        blocked = IPBlacklist.objects.create(
+            ip_address=ip,
+            block_type=block_type,
+            reason=reason or "بلاک شده",
+            is_permanent=is_permanent,
+            expires_at=expires_at,
+        )
+        
+        # پاک کردن کش
+        cache.delete(CACHE_BLACKLIST_KEY.format(ip=ip))
+        
+        return blocked
+    
+    @classmethod
+    def unblock_ip(cls, ip: str) -> int:
+        """آنبلاک کردن IP"""
+        from .models import IPBlacklist
+        count, _ = IPBlacklist.objects.filter(ip_address=ip).delete()
+        cache.delete(CACHE_BLACKLIST_KEY.format(ip=ip))
+        return count
+    
+    # ========== AUTO BLOCK ==========
+    
+    @classmethod
+    def _calculate_expiry(cls, settings) -> Tuple[bool, Optional[timezone.datetime]]:
+        """محاسبه زمان انقضای بلاک بر اساس تنظیمات"""
+        now = timezone.now()
+        
+        if settings.block_duration_type == "forever":
+            return True, None
+        elif settings.block_duration_type == "today":
+            tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            return False, tomorrow
+        elif settings.block_duration_type == "hours":
+            return False, now + timedelta(hours=settings.block_duration_value)
+        else:  # minutes
+            return False, now + timedelta(minutes=settings.block_duration_value)
+    
+    @classmethod
+    def auto_block_ip(cls, ip: str, failed_count: int) -> 'IPBlacklist':
+        """بلاک خودکار IP پس از تلاش‌های ناموفق"""
+        from .models import IPBlacklist, IPBlockType
+        
+        settings = cls.get_settings()
+        is_permanent, expires_at = cls._calculate_expiry(settings)
+        
+        # حذف بلاک‌های خودکار قبلی
+        IPBlacklist.objects.filter(ip_address=ip, block_type=IPBlockType.AUTO).delete()
+        
+        blocked = IPBlacklist.objects.create(
+            ip_address=ip,
+            block_type=IPBlockType.AUTO,
+            reason=f"بلاک خودکار - {failed_count} تلاش ناموفق ورود",
+            is_permanent=is_permanent,
+            expires_at=expires_at,
+            failed_attempts=failed_count,
+        )
+        
+        cache.delete(CACHE_BLACKLIST_KEY.format(ip=ip))
+        logger.warning(f"IP {ip} auto-blocked after {failed_count} failed attempts")
+        
+        return blocked
+    
+    # ========== LOGIN TRACKING ==========
+    
+    @classmethod
+    def record_login_attempt(cls, request, username: str, is_successful: bool):
+        """ثبت تلاش ورود و بررسی نیاز به بلاک"""
+        try:
+            settings = cls.get_settings()
+            if not settings.is_enabled:
+                return
+            
+            ip = cls.get_client_ip(request)
+            user_agent = cls.get_user_agent(request)
+            
+            # ثبت در دیتابیس
+            from .models import LoginAttempt
+            LoginAttempt.objects.create(
+                ip_address=ip,
+                username=username or '',
+                is_successful=is_successful,
+                user_agent=user_agent,
+            )
+            
+            # اگر موفق بود، نیازی به بررسی بیشتر نیست
+            if is_successful:
+                logger.info(f"Successful login from {ip} for user {username}")
+                return
+            
+            # چک whitelist
+            if cls.is_whitelisted(ip):
+                return
+            
+            # شمارش تلاش‌های ناموفق
+            reset_time = timezone.now() - timedelta(minutes=settings.reset_attempts_after)
+            failed_count = LoginAttempt.objects.filter(
+                ip_address=ip,
+                is_successful=False,
+                attempted_at__gte=reset_time
+            ).count()
+            
+            # بلاک اگر از حد مجاز رد شده
+            if failed_count >= settings.max_attempts:
+                cls.auto_block_ip(ip, failed_count)
+                
+        except Exception as e:
+            logger.error(f"Error in record_login_attempt: {e}")
+    
+    # ========== RATE LIMITING ==========
+    
+    @classmethod
+    def check_rate_limit(cls, ip: str, action: str = "request", 
+                        max_requests: int = 60, window_seconds: int = 60) -> Tuple[bool, int]:
+        """
+        بررسی Rate Limit برای یک IP
+        Returns: (is_allowed, remaining_requests)
+        """
+        cache_key = f"rate_limit:{action}:{ip}"
+        
+        current = cache.get(cache_key, 0)
+        
+        if current >= max_requests:
+            return False, 0
+        
+        # افزایش شمارنده
+        if current == 0:
+            cache.set(cache_key, 1, window_seconds)
+        else:
+            cache.incr(cache_key)
+        
+        return True, max_requests - current - 1
+    
+    # ========== CLEANUP ==========
+    
+    @classmethod
+    def cleanup_old_attempts(cls, days: int = 7) -> int:
+        """پاکسازی لاگ‌های قدیمی"""
+        from .models import LoginAttempt
+        cutoff = timezone.now() - timedelta(days=days)
+        count, _ = LoginAttempt.objects.filter(attempted_at__lt=cutoff).delete()
+        logger.info(f"Cleaned up {count} old login attempts")
+        return count
+    
+    @classmethod
+    def cleanup_expired_blocks(cls) -> int:
+        """پاکسازی بلاک‌های منقضی شده"""
+        from .models import IPBlacklist
+        now = timezone.now()
+        count, _ = IPBlacklist.objects.filter(
+            is_permanent=False,
+            expires_at__lt=now
+        ).delete()
+        logger.info(f"Cleaned up {count} expired blocks")
+        return count
+    
+    @classmethod
+    def get_stats(cls) -> dict:
+        """دریافت آمار سیستم امنیت"""
+        from .models import IPBlacklist, IPWhitelist, LoginAttempt
+        from django.db.models import Count
+        
+        now = timezone.now()
+        last_24h = now - timedelta(hours=24)
+        
+        return {
+            "whitelist_count": IPWhitelist.objects.count(),
+            "blacklist_count": IPBlacklist.objects.count(),
+            "active_blocks": IPBlacklist.objects.filter(
+                is_permanent=True
+            ).count() + IPBlacklist.objects.filter(
+                is_permanent=False,
+                expires_at__gt=now
+            ).count(),
+            "login_attempts_24h": LoginAttempt.objects.filter(
+                attempted_at__gte=last_24h
+            ).count(),
+            "failed_attempts_24h": LoginAttempt.objects.filter(
+                attempted_at__gte=last_24h,
+                is_successful=False
+            ).count(),
+        }
+
+
+# ========== BACKWARD COMPATIBLE FUNCTIONS ==========
+# برای سازگاری با کدهای قبلی
 
 def get_client_ip(request):
-  """دریافت IP واقعی کاربر"""
-  x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-  if x_forwarded_for:
-    ip = x_forwarded_for.split(',')[0].strip()
-  else:
-    ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
-  return ip
+    return IPSecurityService.get_client_ip(request)
 
 def record_login_attempt(request, username, is_successful):
-  """ثبت تلاش ورود و بررسی نیاز به بلاک"""
-  from .models import IPSecuritySetting, IPWhitelist, IPBlacklist, LoginAttempt, IPBlockType
-  
-  try:
-    settings = IPSecuritySetting.get_settings()
-    if not settings.is_enabled:
-      return
-    
-    ip = get_client_ip(request)
-    user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
-    
-    # ثبت تلاش
-    LoginAttempt.objects.create(
-      ip_address=ip,
-      username=username or '',
-      is_successful=is_successful,
-      user_agent=user_agent,
-    )
-    
-    # اگر موفق بود، نیازی به بررسی بلاک نیست
-    if is_successful:
-      return
-    
-    # چک whitelist
-    if IPWhitelist.objects.filter(ip_address=ip).exists():
-      return
-    
-    # شمارش تلاش‌های ناموفق اخیر
-    reset_time = timezone.now() - timedelta(minutes=settings.reset_attempts_after)
-    failed_count = LoginAttempt.objects.filter(
-      ip_address=ip,
-      is_successful=False,
-      attempted_at__gte=reset_time
-    ).count()
-    
-    # اگر از حد مجاز رد شده، بلاک کن
-    if failed_count >= settings.max_attempts:
-      block_ip_auto(ip, settings, failed_count)
-  except Exception as e:
-    print(f"Error in record_login_attempt: {e}")
+    return IPSecurityService.record_login_attempt(request, username, is_successful)
 
 def block_ip_auto(ip, settings, failed_count):
-  """بلاک خودکار IP"""
-  from .models import IPBlacklist, IPBlockType
-  
-  now = timezone.now()
-  
-  # محاسبه زمان انقضا
-  if settings.block_duration_type == "forever":
-    is_permanent = True
-    expires_at = None
-  elif settings.block_duration_type == "today":
-    is_permanent = False
-    # پایان امروز
-    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    expires_at = tomorrow
-  elif settings.block_duration_type == "hours":
-    is_permanent = False
-    expires_at = now + timedelta(hours=settings.block_duration_value)
-  else:  # minutes
-    is_permanent = False
-    expires_at = now + timedelta(minutes=settings.block_duration_value)
-  
-  # حذف بلاک‌های قبلی این IP
-  IPBlacklist.objects.filter(ip_address=ip, block_type=IPBlockType.AUTO).delete()
-  
-  # ایجاد بلاک جدید
-  IPBlacklist.objects.create(
-    ip_address=ip,
-    block_type=IPBlockType.AUTO,
-    reason=f"بلاک خودکار - {failed_count} تلاش ناموفق ورود",
-    is_permanent=is_permanent,
-    expires_at=expires_at,
-    failed_attempts=failed_count,
-  )
+    return IPSecurityService.auto_block_ip(ip, failed_count)
 
 def block_ip_manual(ip, reason="", is_permanent=False, duration_minutes=None, duration_hours=None, until_date=None):
-  """بلاک دستی IP توسط ادمین"""
-  from .models import IPBlacklist, IPBlockType
-  
-  now = timezone.now()
-  
-  if is_permanent:
-    expires_at = None
-  elif until_date:
-    expires_at = until_date
-  elif duration_hours:
-    expires_at = now + timedelta(hours=duration_hours)
-  elif duration_minutes:
-    expires_at = now + timedelta(minutes=duration_minutes)
-  else:
-    expires_at = now + timedelta(hours=24)  # پیش‌فرض 24 ساعت
-  
-  # حذف بلاک‌های قبلی این IP
-  IPBlacklist.objects.filter(ip_address=ip).delete()
-  
-  # ایجاد بلاک جدید
-  return IPBlacklist.objects.create(
-    ip_address=ip,
-    block_type=IPBlockType.MANUAL,
-    reason=reason or "بلاک دستی توسط مدیر",
-    is_permanent=is_permanent,
-    expires_at=expires_at,
-  )
+    return IPSecurityService.block_ip(
+        ip, reason, is_permanent,
+        duration_minutes=duration_minutes,
+        duration_hours=duration_hours
+    )
 
 def unblock_ip(ip):
-  """آنبلاک IP"""
-  from .models import IPBlacklist
-  return IPBlacklist.objects.filter(ip_address=ip).delete()
+    return IPSecurityService.unblock_ip(ip)
 
 def is_ip_blocked(ip):
-  """بررسی اینکه آیا IP بلاک شده است"""
-  from .models import IPBlacklist, IPWhitelist
-  
-  # چک whitelist
-  if IPWhitelist.objects.filter(ip_address=ip).exists():
-    return False, None
-  
-  # چک blacklist
-  now = timezone.now()
-  blocked = IPBlacklist.objects.filter(ip_address=ip).first()
-  
-  if blocked:
-    if blocked.is_permanent:
-      return True, blocked
-    elif blocked.expires_at and blocked.expires_at > now:
-      return True, blocked
-    else:
-      # بلاک منقضی شده
-      blocked.delete()
-  
-  return False, None
+    return IPSecurityService.is_blocked(ip)
 
 def cleanup_old_attempts(days=7):
-  """پاکسازی لاگ‌های قدیمی تلاش ورود"""
-  from .models import LoginAttempt
-  cutoff = timezone.now() - timedelta(days=days)
-  return LoginAttempt.objects.filter(attempted_at__lt=cutoff).delete()
+    return IPSecurityService.cleanup_old_attempts(days)
 
 def cleanup_expired_blocks():
-  """پاکسازی بلاک‌های منقضی شده"""
-  from .models import IPBlacklist
-  now = timezone.now()
-  return IPBlacklist.objects.filter(
-    is_permanent=False,
-    expires_at__lt=now
-  ).delete()
+    return IPSecurityService.cleanup_expired_blocks()
 PY
 
   cat > app/courses/apps.py <<'PY'
