@@ -5363,59 +5363,208 @@ HTML
 
   cat > app/templates/dashboard/home.html <<'HTML'
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}داشبورد{% endblock %}
 {% block content %}
-<div class="grid gap-4 lg:grid-cols-3">
-  <div class="lg:col-span-2 space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-xl font-extrabold">داشبورد</h1>
-          <div class="text-sm text-slate-500 dark:text-slate-300">موجودی کیف پول: <b>{{ wallet.balance }}</b> تومان</div>
-        </div>
-        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/">دوره‌ها</a>
+<div class="space-y-6">
+  <!-- Welcome Header -->
+  <div class="rounded-3xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 p-8 text-white shadow-xl">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black mb-2">سلام {{ user.first_name|default:user.username }} 👋</h1>
+        <p class="text-white/80">به پنل کاربری خود خوش آمدید</p>
       </div>
-    </div>
-
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      <h2 class="font-bold mb-3">آخرین سفارش‌ها</h2>
-      <div class="space-y-2 text-sm">
-        {% for o in orders %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-            <div class="flex items-center justify-between gap-3">
-              <div class="font-semibold">{{ o.course.title }}</div>
-              <div><b>{{ o.final_amount }}</b> تومان</div>
-              <span class="rounded-xl px-3 py-1 text-xs bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200">{{ o.get_status_display }}</span>
-            </div>
-          </div>
-        {% empty %}<div class="text-slate-500 dark:text-slate-300">سفارشی ندارید.</div>{% endfor %}
+      <div class="text-right">
+        <div class="text-sm text-white/70">موجودی کیف پول</div>
+        <div class="text-3xl font-black">{{ wallet.balance|stringformat:",.0f"|default:wallet.balance }} <span class="text-lg">تومان</span></div>
       </div>
     </div>
   </div>
 
-  <aside class="space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      <h3 class="font-bold mb-3">میانبر</h3>
-      <div class="grid gap-2 text-sm">
-        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/wallet/">کیف پول</a>
-        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/invoices/">فاکتورها</a>
-        <a class="rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/accounts/security/">سوال امنیتی</a>
-        <a class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950 dark:hover:bg-emerald-900 font-medium text-emerald-700 dark:text-emerald-300" href="/accounts/qr/">🔮 QR Code من</a>
-        {% if user.is_staff %}
-        <a class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-950 dark:hover:bg-orange-900 font-medium text-orange-700 dark:text-orange-300" href="/panel/tools/">🛠️ ابزارهای مدیریت</a>
-        {% endif %}
+  <!-- Quick Stats -->
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+          <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ enrollments.count }}</div>
+          <div class="text-sm text-slate-500 dark:text-slate-400">دوره‌های من</div>
+        </div>
       </div>
     </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-      <h3 class="font-bold mb-3">تیکت‌ها</h3>
-      <div class="space-y-2 text-sm">
-        {% for t in tickets %}
-          <a class="block rounded-xl border border-slate-200 px-4 py-2 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900" href="/tickets/{{ t.id }}/">{{ t.subject }}</a>
-        {% empty %}<div class="text-slate-500 dark:text-slate-300">تیکتی ندارید.</div>{% endfor %}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+          <svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ orders.count }}</div>
+          <div class="text-sm text-slate-500 dark:text-slate-400">سفارش‌ها</div>
+        </div>
       </div>
-      <a class="mt-3 block rounded-xl bg-slate-900 px-4 py-2 text-center text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/tickets/new/">ثبت تیکت</a>
     </div>
-  </aside>
+    <div class="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+          <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+        </div>
+        <div>
+          <div class="text-2xl font-bold text-slate-900 dark:text-white">{{ tickets.count }}</div>
+          <div class="text-sm text-slate-500 dark:text-slate-400">تیکت‌ها</div>
+        </div>
+      </div>
+    </div>
+    <a href="/wallet/" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-800 dark:bg-emerald-900/30 hover:shadow-md transition-shadow">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-emerald-200 dark:bg-emerald-800 flex items-center justify-center">
+          <svg class="w-6 h-6 text-emerald-700 dark:text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <div>
+          <div class="text-sm text-emerald-700 dark:text-emerald-300 font-medium">شارژ کیف پول</div>
+          <div class="text-xs text-emerald-600/70 dark:text-emerald-400/70">افزایش موجودی →</div>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="grid gap-6 lg:grid-cols-3">
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- My Courses -->
+      <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            دوره‌های من
+          </h2>
+          <a href="/" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">مشاهده همه</a>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {% for e in enrollments %}
+          <a href="/courses/{{ e.course.slug }}/" class="group rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-slate-800 dark:bg-slate-800/50 dark:hover:border-indigo-800 dark:hover:bg-indigo-900/20 transition-colors">
+            <div class="font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-1">{{ e.course.title }}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{{ e.created_at|jalali }}</div>
+          </a>
+          {% empty %}
+          <div class="col-span-2 text-center py-8">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            </div>
+            <p class="text-slate-500 dark:text-slate-400 mb-4">هنوز در دوره‌ای ثبت‌نام نکرده‌اید</p>
+            <a href="/" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+              مشاهده دوره‌ها
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Recent Orders -->
+      <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+            آخرین سفارش‌ها
+          </h2>
+          <a href="/orders/my/" class="text-sm text-emerald-600 dark:text-emerald-400 hover:underline">مشاهده همه</a>
+        </div>
+        <div class="space-y-3">
+          {% for o in orders %}
+          <div class="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/50">
+            <div class="min-w-0 flex-1">
+              <div class="font-semibold text-slate-900 dark:text-white truncate">{{ o.course.title }}</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">{{ o.created_at|jalali_datetime }}</div>
+            </div>
+            <div class="text-left">
+              <div class="font-bold text-slate-900 dark:text-white">{{ o.final_amount|stringformat:",.0f"|default:o.final_amount }}</div>
+              <div class="text-xs text-slate-500">تومان</div>
+            </div>
+            <span class="rounded-full px-3 py-1 text-xs font-medium 
+              {% if o.status == 'paid' %}bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300
+              {% elif o.status == 'pending' %}bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300
+              {% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300{% endif %}">
+              {{ o.get_status_display }}
+            </span>
+          </div>
+          {% empty %}
+          <div class="text-center py-6 text-slate-500 dark:text-slate-400">سفارشی ثبت نشده است</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="space-y-6">
+      <!-- Quick Links -->
+      <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          دسترسی سریع
+        </h3>
+        <div class="grid gap-2">
+          <a class="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 transition-colors" href="/wallet/">
+            <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+              <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+            </div>
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">کیف پول</span>
+          </a>
+          <a class="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 transition-colors" href="/invoices/">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+              <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            </div>
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">فاکتورها</span>
+          </a>
+          <a class="flex items-center gap-3 rounded-xl border border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 transition-colors" href="/accounts/profile/">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
+              <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+            </div>
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">پروفایل</span>
+          </a>
+          <a class="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 transition-colors" href="/accounts/qr/">
+            <div class="w-8 h-8 rounded-lg bg-indigo-200 dark:bg-indigo-800 flex items-center justify-center">
+              <svg class="w-4 h-4 text-indigo-700 dark:text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+            </div>
+            <span class="text-sm font-medium text-indigo-700 dark:text-indigo-300">QR Code من</span>
+          </a>
+          {% if user.is_staff %}
+          <a class="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 transition-colors" href="/panel/tools/">
+            <div class="w-8 h-8 rounded-lg bg-amber-200 dark:bg-amber-800 flex items-center justify-center">
+              <svg class="w-4 h-4 text-amber-700 dark:text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            </div>
+            <span class="text-sm font-medium text-amber-700 dark:text-amber-300">ابزارهای مدیریت</span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Support Tickets -->
+      <div class="rounded-3xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+            تیکت‌های پشتیبانی
+          </h3>
+        </div>
+        <div class="space-y-2 mb-4">
+          {% for t in tickets %}
+          <a class="block rounded-xl border border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800 transition-colors" href="/tickets/{{ t.id }}/">
+            <div class="font-medium text-sm text-slate-900 dark:text-white truncate">{{ t.subject }}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ t.created_at|jalali }}</div>
+          </a>
+          {% empty %}
+          <div class="text-center py-4 text-sm text-slate-500 dark:text-slate-400">تیکتی ثبت نشده</div>
+          {% endfor %}
+        </div>
+        <a class="flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 transition-colors" href="/tickets/new/">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+          ثبت تیکت جدید
+        </a>
+      </div>
+    </aside>
+  </div>
 </div>
 {% endblock %}
 HTML
