@@ -7208,15 +7208,40 @@ backup_db(){
   set -a; . "$ENV_FILE"; set +a
   cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
   mkdir -p "$BACKUP_DIR"
+  
+  # Validate required variables
+  [[ -n "${DB_NAME:-}" ]] || die "DB_NAME is not set in .env"
+  [[ -n "${DB_PASS:-}" ]] || die "DB_PASS is not set in .env"
+  
   echo "Starting database container if not running..."
   docker compose up -d db >/dev/null 2>&1 || true
-  # Wait for DB to be ready
-  sleep 3
-  local ts file; ts="$(date +%Y%m%d-%H%M%S)"; file="${BACKUP_DIR}/${DB_NAME}-${ts}.sql"
+  
+  # Wait for DB to be ready with proper check
+  echo "Waiting for database to be ready..."
+  local wait_count=0
+  while ! docker compose exec -T db mysqladmin ping -h127.0.0.1 -uroot -p"${DB_PASS}" --silent 2>/dev/null; do
+    wait_count=$((wait_count + 1))
+    if [[ $wait_count -gt 30 ]]; then
+      die "Database did not become ready in time"
+    fi
+    echo "  Waiting... ($wait_count/30)"
+    sleep 2
+  done
+  
+  local ts file
+  ts="$(date +%Y%m%d-%H%M%S)"
+  file="${BACKUP_DIR}/${DB_NAME}-${ts}.sql"
+  
   echo "Creating backup..."
-  if docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysqldump -uroot --databases \"${DB_NAME}\" --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF" > "$file"; then
-    chmod 600 "$file"
-    echo "✅ Backup created: $file"
+  if docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysqldump -uroot --databases "${DB_NAME}" --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF > "$file" 2>/dev/null; then
+    if [[ -s "$file" ]]; then
+      chmod 600 "$file"
+      echo "✅ Backup created: $file"
+      echo "   Size: $(du -h "$file" | cut -f1)"
+    else
+      rm -f "$file" 2>/dev/null || true
+      die "Backup file is empty"
+    fi
   else
     rm -f "$file" 2>/dev/null || true
     die "Backup failed"
@@ -7228,27 +7253,54 @@ restore_db(){
   [[ -f "$ENV_FILE" ]] || die ".env not found"
   set -a; . "$ENV_FILE"; set +a
   cd "$APP_DIR" || die "Cannot cd to $APP_DIR"
+  
+  # Validate required variables
+  [[ -n "${DB_NAME:-}" ]] || die "DB_NAME is not set in .env"
+  [[ -n "${DB_PASS:-}" ]] || die "DB_PASS is not set in .env"
+  
   local sql_file="${1:-}"
   [[ -n "$sql_file" && -f "$sql_file" ]] || die "Provide existing .sql path."
+  
+  # Check file is not empty
+  [[ -s "$sql_file" ]] || die "Backup file is empty"
 
-  echo "WARNING: This will overwrite DB '${DB_NAME}' using: ${sql_file}"
+  echo ""
+  echo "⚠️  WARNING: This will overwrite database '${DB_NAME}'"
+  echo "   Using backup: ${sql_file}"
+  echo "   Size: $(du -h "$sql_file" | cut -f1)"
+  echo ""
   read -r -p "Type YES to continue: " ans </dev/tty || true
   [[ "${ans:-}" == "YES" ]] || { echo "Canceled."; return 0; }
 
   echo "Starting database container..."
   docker compose up -d db >/dev/null 2>&1 || true
-  sleep 3
+  
+  # Wait for DB to be ready
+  echo "Waiting for database to be ready..."
+  local wait_count=0
+  while ! docker compose exec -T db mysqladmin ping -h127.0.0.1 -uroot -p"${DB_PASS}" --silent 2>/dev/null; do
+    wait_count=$((wait_count + 1))
+    if [[ $wait_count -gt 30 ]]; then
+      die "Database did not become ready in time"
+    fi
+    sleep 2
+  done
+  
   echo "Dropping and recreating database..."
-  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot -e 'DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"; then
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
     die "Failed to recreate database"
   fi
-  echo "Restoring from backup..."
-  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db sh -lc "mysql -uroot \"${DB_NAME}\"" < "${sql_file}"; then
+  
+  echo "Restoring from backup (this may take a while)..."
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot "${DB_NAME}" < "${sql_file}" 2>/dev/null; then
     die "Restore failed"
   fi
+  
   echo "Starting web and nginx containers..."
   docker compose up -d web nginx >/dev/null 2>&1 || true
-  echo "✅ Restore completed successfully."
+  
+  echo ""
+  echo "✅ Restore completed successfully!"
 }
 
 change_domain(){
