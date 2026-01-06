@@ -5066,90 +5066,245 @@ HTML
   cat > app/templates/base.html <<'HTML'
 {% load static jalali_tags %}
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" class="theme-transition">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
   {% if site_settings.favicon %}<link rel="icon" href="{{ site_settings.favicon.url }}">{% endif %}
   <title>{% block title %}{{ site_settings.brand_name|default:"EduCMS" }}{% endblock %}</title>
+  <style>
+    .theme-transition, .theme-transition *, .theme-transition *::before, .theme-transition *::after {
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
+    }
+  </style>
+  <script>
+    // Load theme before page renders to prevent flash
+    (function() {
+      var theme = localStorage.getItem('theme') || '{{ site_settings.default_theme|default:"system" }}';
+      var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) document.documentElement.classList.add('dark');
+    })();
+  </script>
 </head>
-<body class="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
-<header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur">
+<body class="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900 dark:from-slate-950 dark:to-slate-900 dark:text-slate-100">
+<header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur dark:border-slate-800/70 dark:bg-slate-900/85">
   <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-3">
     <a href="/" class="flex items-center gap-3">
       {% if site_settings.logo %}
         <img src="{{ site_settings.logo.url }}" class="h-9 w-auto" alt="{{ site_settings.brand_name }}">
       {% else %}
-        <div class="h-9 w-9 rounded-2xl bg-slate-900"></div>
+        <div class="h-9 w-9 rounded-2xl bg-slate-900 dark:bg-white"></div>
       {% endif %}
       <span class="font-extrabold text-xl tracking-tight">{{ site_settings.brand_name|default:"EduCMS" }}</span>
     </a>
 
-    {% if user.is_authenticated %}
-      {% if request.path|slice:":11" == "/dashboard/" or request.path|slice:":8" == "/wallet/" or request.path|slice:":10" == "/invoices/" or request.path|slice:":8" == "/orders/" or request.path|slice:":9" == "/tickets/" or request.path|slice:":18" == "/accounts/profile/" or request.path|slice:":19" == "/accounts/security/" %}
-        <div class="relative">
-          <button id="dashMenuBtn" type="button"
-                  class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50"
-                  aria-expanded="false" aria-controls="dashMenu">
-            <span class="sr-only">منو</span>
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          <div id="dashMenu"
-               class="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg
-                      max-h-0 opacity-0 -translate-y-2 pointer-events-none transition-all duration-300 ease-out">
-            <div class="p-2 text-sm">
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/dashboard/">داشبورد</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/wallet/">کیف پول</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/invoices/">فاکتورها</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/orders/my/">سفارش‌ها</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/tickets/">تیکت‌ها</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/accounts/profile/">پروفایل</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/accounts/security/">سوال امنیتی</a>
-              <a class="block rounded-xl px-3 py-2 hover:bg-slate-100" href="/accounts/qr/">🔮 QR Code</a>
-
-              <form method="post" action="/accounts/logout/" class="mt-1">{% csrf_token %}
-                <button class="w-full rounded-xl border border-slate-200 px-3 py-2 text-right hover:bg-slate-50">خروج</button>
-              </form>
-
-              {% if user.is_staff %}
-                <a class="mt-2 block rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50"
-                   href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
-              {% endif %}
-            </div>
+    <div class="flex items-center gap-2">
+      <!-- Theme Switcher -->
+      <div class="relative">
+        <button id="themeBtn" type="button" 
+                class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white p-2 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                aria-label="تغییر تم">
+          <svg id="themeIconLight" class="h-5 w-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+          </svg>
+          <svg id="themeIconDark" class="h-5 w-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+          </svg>
+          <svg id="themeIconSystem" class="h-5 w-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+        </button>
+        
+        <div id="themeMenu" class="absolute left-0 mt-2 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 max-h-0 opacity-0 pointer-events-none transition-all duration-200">
+          <div class="p-1">
+            <button data-theme="light" class="theme-option flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+              </svg>
+              <span>روشن</span>
+              <svg class="h-4 w-4 mr-auto check-icon hidden text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
+            <button data-theme="dark" class="theme-option flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+              </svg>
+              <span>تاریک</span>
+              <svg class="h-4 w-4 mr-auto check-icon hidden text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
+            <button data-theme="system" class="theme-option flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+              </svg>
+              <span>سیستم</span>
+              <svg class="h-4 w-4 mr-auto check-icon hidden text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
           </div>
         </div>
+      </div>
+
+      {% if user.is_authenticated %}
+        {% if request.path|slice:":11" == "/dashboard/" or request.path|slice:":8" == "/wallet/" or request.path|slice:":10" == "/invoices/" or request.path|slice:":8" == "/orders/" or request.path|slice:":9" == "/tickets/" or request.path|slice:":18" == "/accounts/profile/" or request.path|slice:":19" == "/accounts/security/" %}
+          <div class="relative">
+            <button id="dashMenuBtn" type="button"
+                    class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                    aria-expanded="false" aria-controls="dashMenu">
+              <span class="sr-only">منو</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <div id="dashMenu"
+                 class="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800
+                        max-h-0 opacity-0 -translate-y-2 pointer-events-none transition-all duration-300 ease-out">
+              <div class="p-2 text-sm">
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/dashboard/">داشبورد</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/wallet/">کیف پول</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/invoices/">فاکتورها</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/orders/my/">سفارش‌ها</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/tickets/">تیکت‌ها</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/accounts/profile/">پروفایل</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/accounts/security/">سوال امنیتی</a>
+                <a class="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700" href="/accounts/qr/">🔮 QR Code</a>
+
+                <form method="post" action="/accounts/logout/" class="mt-1">{% csrf_token %}
+                  <button class="w-full rounded-xl border border-slate-200 px-3 py-2 text-right hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700">خروج</button>
+                </form>
+
+                {% if user.is_staff %}
+                  <a class="mt-2 block rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700"
+                     href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if request.path|slice:":11" != "/dashboard/" and request.path|slice:":8" != "/wallet/" and request.path|slice:":10" != "/invoices/" and request.path|slice:":8" != "/orders/" and request.path|slice:":9" != "/tickets/" and request.path|slice:":18" != "/accounts/profile/" and request.path|slice:":19" != "/accounts/security/" %}
+          <div class="flex items-center gap-2 text-sm">
+            <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700" href="/dashboard/">پنل کاربری</a>
+            <form method="post" action="/accounts/logout/" class="inline">{% csrf_token %}
+              <button class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700">خروج</button>
+            </form>
+            {% if user.is_staff %}
+              <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700"
+                 href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
+            {% endif %}
+          </div>
+        {% endif %}
       {% endif %}
 
-      {% if request.path|slice:":11" != "/dashboard/" and request.path|slice:":8" != "/wallet/" and request.path|slice:":10" != "/invoices/" and request.path|slice:":8" != "/orders/" and request.path|slice:":9" != "/tickets/" and request.path|slice:":18" != "/accounts/profile/" and request.path|slice:":19" != "/accounts/security/" %}
+      {% if not user.is_authenticated %}
         <div class="flex items-center gap-2 text-sm">
-          <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50" href="/dashboard/">پنل کاربری</a>
-          <form method="post" action="/accounts/logout/" class="inline">{% csrf_token %}
-            <button class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50">خروج</button>
-          </form>
-          {% if user.is_staff %}
-            <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50"
-               href="/{{ site_settings.admin_path|default:'admin' }}/">ادمین</a>
-          {% endif %}
+          <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700" href="/accounts/login/">ورود</a>
+          <a class="rounded-xl bg-slate-900 px-3 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" href="/accounts/register/">ثبت‌نام</a>
         </div>
       {% endif %}
-    {% endif %}
-
-    {% if not user.is_authenticated %}
-      <div class="flex items-center gap-2 text-sm">
-        <a class="rounded-xl border border-slate-200 px-3 py-2 hover:bg-slate-50" href="/accounts/login/">ورود</a>
-        <a class="rounded-xl bg-slate-900 px-3 py-2 text-white hover:opacity-95" href="/accounts/register/">ثبت‌نام</a>
-      </div>
-    {% endif %}
+    </div>
 
   </div>
 </header>
 
 <script>
 (function(){
+  // Theme management
+  var themeBtn = document.getElementById('themeBtn');
+  var themeMenu = document.getElementById('themeMenu');
+  var themeOptions = document.querySelectorAll('.theme-option');
+  var iconLight = document.getElementById('themeIconLight');
+  var iconDark = document.getElementById('themeIconDark');
+  var iconSystem = document.getElementById('themeIconSystem');
+  
+  var defaultTheme = '{{ site_settings.default_theme|default:"system" }}';
+  var currentTheme = localStorage.getItem('theme') || defaultTheme;
+  
+  function applyTheme(theme) {
+    currentTheme = theme;
+    localStorage.setItem('theme', theme);
+    
+    var isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    // Update icon
+    iconLight.classList.add('hidden');
+    iconDark.classList.add('hidden');
+    iconSystem.classList.add('hidden');
+    
+    if (theme === 'light') iconLight.classList.remove('hidden');
+    else if (theme === 'dark') iconDark.classList.remove('hidden');
+    else iconSystem.classList.remove('hidden');
+    
+    // Update checkmarks
+    themeOptions.forEach(function(btn) {
+      var check = btn.querySelector('.check-icon');
+      if (btn.dataset.theme === theme) {
+        check.classList.remove('hidden');
+      } else {
+        check.classList.add('hidden');
+      }
+    });
+  }
+  
+  // Initial apply
+  applyTheme(currentTheme);
+  
+  // Listen for system theme changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+    if (currentTheme === 'system') applyTheme('system');
+  });
+  
+  // Theme menu toggle
+  var themeMenuOpen = false;
+  
+  function closeThemeMenu() {
+    themeMenu.classList.add('max-h-0', 'opacity-0', 'pointer-events-none');
+    themeMenu.classList.remove('max-h-48', 'opacity-100', 'pointer-events-auto');
+    themeMenuOpen = false;
+  }
+  
+  function openThemeMenu() {
+    themeMenu.classList.remove('max-h-0', 'opacity-0', 'pointer-events-none');
+    themeMenu.classList.add('max-h-48', 'opacity-100', 'pointer-events-auto');
+    themeMenuOpen = true;
+  }
+  
+  themeBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    themeMenuOpen ? closeThemeMenu() : openThemeMenu();
+  });
+  
+  themeOptions.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      applyTheme(this.dataset.theme);
+      closeThemeMenu();
+    });
+  });
+  
+  document.addEventListener('click', function(e) {
+    if (themeMenuOpen && !themeMenu.contains(e.target) && !themeBtn.contains(e.target)) {
+      closeThemeMenu();
+    }
+  });
+
+  // Dashboard menu
   var btn = document.getElementById('dashMenuBtn');
   var menu = document.getElementById('dashMenu');
   if(!btn || !menu) return;
@@ -5177,7 +5332,10 @@ HTML
   });
 
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape') closeMenu();
+    if(e.key === 'Escape') {
+      closeMenu();
+      closeThemeMenu();
+    }
   });
 })();
 </script>
@@ -5186,15 +5344,15 @@ HTML
   {% if messages %}
     <div class="mb-5 space-y-2">
       {% for m in messages %}
-        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-sm">{{ m }}</div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-800">{{ m }}</div>
       {% endfor %}
     </div>
   {% endif %}
   {% block content %}{% endblock %}
 </main>
 
-<footer class="border-t border-slate-200/70 bg-white">
-  <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500">
+<footer class="border-t border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-900">
+  <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-500 dark:text-slate-400">
     {{ site_settings.footer_text|default:"© تمامی حقوق محفوظ است." }}
   </div>
 </footer>
