@@ -2330,6 +2330,8 @@ from .forms import AdminAccountForm
 
 @staff_member_required
 def admin_account_in_admin(request):
+  from .models import SiteSetting
+  site_settings = SiteSetting.objects.first()
   form = AdminAccountForm(request.POST or None, initial={"username": request.user.username})
   if request.method=="POST" and form.is_valid():
     u=request.user
@@ -2339,7 +2341,7 @@ def admin_account_in_admin(request):
     update_session_auth_hash(request,u)
     messages.success(request,"نام کاربری/رمز ادمین تغییر کرد.")
     return redirect("/admin/")
-  return render(request,"settings/admin_account.html",{"form":form})
+  return render(request,"settings/admin_account.html",{"form":form, "site_settings": site_settings})
 PY
   cat > app/settingsapp/middleware.py <<'PY'
 from django.http import HttpResponseNotFound, HttpResponseForbidden
