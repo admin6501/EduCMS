@@ -2003,15 +2003,26 @@ def backup_create(request):
   """ایجاد بکاپ جدید"""
   if request.method == "POST":
     try:
+      import shlex
       os.makedirs(BACKUP_DIR, exist_ok=True)
       ts = datetime.now().strftime("%Y%m%d-%H%M%S")
       db_name = os.getenv("DB_NAME", "educms")
       db_pass = os.getenv("DB_PASSWORD", "")
+      
+      # Validate db_name to prevent injection
+      if not db_name.replace("_", "").replace("-", "").isalnum():
+        messages.error(request, "نام دیتابیس نامعتبر است")
+        return redirect("backup_management")
+      
       backup_file = os.path.join(BACKUP_DIR, f"{db_name}-{ts}.sql")
       
-      # Run mysqldump via docker compose
-      cmd = f'cd /opt/educms && docker compose exec -T -e MYSQL_PWD="{db_pass}" db sh -lc "mysqldump -uroot --databases {db_name} --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF"'
-      result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
+      # Run mysqldump via docker compose - using subprocess.run with list for safety
+      cmd = [
+        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
+        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
+        "sh", "-c", f"mysqldump -uroot --databases {shlex.quote(db_name)} --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF"
+      ]
+      result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd="/opt/educms")
       
       if result.returncode == 0:
         with open(backup_file, "w") as f:
@@ -2019,9 +2030,13 @@ def backup_create(request):
         os.chmod(backup_file, 0o600)
         messages.success(request, f"بکاپ با موفقیت ایجاد شد: {os.path.basename(backup_file)}")
       else:
-        messages.error(request, f"خطا در ایجاد بکاپ: {result.stderr}")
+        messages.error(request, f"خطا در ایجاد بکاپ: {result.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+      messages.error(request, "عملیات بکاپ بیش از حد طول کشید")
     except Exception as e:
-      messages.error(request, f"خطا: {str(e)}")
+      import logging
+      logging.getLogger(__name__).error(f"Backup creation error: {e}")
+      messages.error(request, f"خطا: {str(e)[:100]}")
   
   return redirect("backup_management")
 
