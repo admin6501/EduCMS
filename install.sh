@@ -317,7 +317,7 @@ def get_calendar_type():
         from settingsapp.models import SiteSetting
         setting = SiteSetting.objects.first()
         return setting.calendar_type if setting else 'jalali'
-    except:
+    except Exception:
         return 'jalali'
 
 def to_persian_num(num):
