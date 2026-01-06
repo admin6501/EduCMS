@@ -6202,7 +6202,7 @@ HTML
 </style>
 <div class="backup-container">
   <div class="backup-header">
-    <h1 style="margin:0;">🗄️ مدیریت بکاپ</h1>
+    <h1 style="margin:0;">🗄️ مدیریت بکاپ {{ site_settings.brand_name|default:"" }}</h1>
     <form method="post" action="{% url 'backup_create' %}">
       {% csrf_token %}
       <button type="submit" class="backup-btn backup-btn-success">+ ایجاد بکاپ جدید</button>
