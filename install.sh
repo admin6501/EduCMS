@@ -5863,16 +5863,37 @@ HTML
 {% extends "base.html" %}
 {% block title %}ورود{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="login-container">
-  <h1 class="text-xl font-bold mb-1">ورود</h1>
-  <form method="post" class="space-y-4" data-testid="login-form">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" data-testid="login-submit-btn">ورود</button>
-  </form>
-  <div class="mt-3 text-sm text-slate-500 dark:text-slate-300">رمز را فراموش کرده‌اید؟ <a class="underline" href="/accounts/reset/" data-testid="forgot-password-link">بازیابی</a></div>
-  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">حساب ندارید؟ <a class="underline" href="/accounts/register/" data-testid="register-link">ثبت‌نام</a></div>
+<div class="min-h-[60vh] flex items-center justify-center py-8">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+      </div>
+      <h1 class="text-2xl font-black text-slate-900 dark:text-white">خوش آمدید</h1>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">برای ادامه وارد حساب خود شوید</p>
+    </div>
+    
+    <div class="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900" data-testid="login-container">
+      <form method="post" class="space-y-5" data-testid="login-form">{% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+        <button type="submit" class="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3.5 text-white font-bold hover:opacity-95 transition-opacity shadow-lg shadow-indigo-500/25" data-testid="login-submit-btn">
+          ورود به حساب
+        </button>
+      </form>
+      
+      <div class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 space-y-3 text-center">
+        <a class="block text-sm text-indigo-600 dark:text-indigo-400 hover:underline" href="/accounts/reset/" data-testid="forgot-password-link">رمز عبور را فراموش کرده‌اید؟</a>
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+          حساب کاربری ندارید؟ 
+          <a class="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline" href="/accounts/register/" data-testid="register-link">ثبت‌نام کنید</a>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+{% endblock %}
+HTML
 {% endblock %}
 HTML
   cat > app/templates/accounts/register.html <<'HTML'
