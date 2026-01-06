@@ -5254,15 +5254,15 @@ HTML
 {% extends "base.html" %}
 {% block title %}ورود{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="login-container">
   <h1 class="text-xl font-bold mb-1">ورود</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
+  <form method="post" class="space-y-4" data-testid="login-form">{% csrf_token %}
     {% include "partials/form_errors.html" %}
     {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ورود</button>
+    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" data-testid="login-submit-btn">ورود</button>
   </form>
-  <div class="mt-3 text-sm text-slate-500 dark:text-slate-300">رمز را فراموش کرده‌اید؟ <a class="underline" href="/accounts/reset/">بازیابی</a></div>
-  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">حساب ندارید؟ <a class="underline" href="/accounts/register/">ثبت‌نام</a></div>
+  <div class="mt-3 text-sm text-slate-500 dark:text-slate-300">رمز را فراموش کرده‌اید؟ <a class="underline" href="/accounts/reset/" data-testid="forgot-password-link">بازیابی</a></div>
+  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">حساب ندارید؟ <a class="underline" href="/accounts/register/" data-testid="register-link">ثبت‌نام</a></div>
 </div>
 {% endblock %}
 HTML
@@ -5270,14 +5270,14 @@ HTML
 {% extends "base.html" %}
 {% block title %}ثبت‌نام{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="register-container">
   <h1 class="text-xl font-bold mb-1">ثبت‌نام</h1>
-  <form method="post" class="space-y-4">{% csrf_token %}
+  <form method="post" class="space-y-4" data-testid="register-form">{% csrf_token %}
     {% include "partials/form_errors.html" %}
     {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ساخت حساب</button>
+    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" data-testid="register-submit-btn">ساخت حساب</button>
   </form>
-  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">قبلاً ثبت‌نام کرده‌اید؟ <a class="underline" href="/accounts/login/">ورود</a></div>
+  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">قبلاً ثبت‌نام کرده‌اید؟ <a class="underline" href="/accounts/login/" data-testid="login-link">ورود</a></div>
 </div>
 {% endblock %}
 HTML
