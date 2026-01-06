@@ -1001,8 +1001,9 @@ class RegisterForm(UserCreationForm):
                 custom_data = self.get_custom_field_data()
                 if custom_data and hasattr(prof, 'extra_data'):
                     prof.extra_data = custom_data
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to save custom fields: {e}")
             prof.save()
         return user
 
