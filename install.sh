@@ -2926,6 +2926,23 @@ class Course(models.Model):
     verbose_name=_("دوره"); verbose_name_plural=_("دوره‌ها")
 
 
+class CourseFeature(models.Model):
+  """ویژگی‌های هر دوره"""
+  id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+  course=models.ForeignKey(Course, on_delete=models.CASCADE, related_name="features", verbose_name=_("دوره"))
+  title=models.CharField(max_length=200, verbose_name=_("عنوان ویژگی"))
+  icon=models.CharField(max_length=50, blank=True, default="check", verbose_name=_("آیکون"), help_text=_("نام آیکون: check, video, mobile, support, certificate, file, clock, users"))
+  position=models.PositiveIntegerField(default=0, verbose_name=_("ترتیب"))
+
+  class Meta:
+    ordering = ["position", "id"]
+    verbose_name=_("ویژگی دوره")
+    verbose_name_plural=_("ویژگی‌های دوره")
+
+  def __str__(self):
+    return f"{self.course.title} - {self.title}"
+
+
 class Enrollment(models.Model):
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
   user=models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name=_("کاربر"))
