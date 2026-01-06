@@ -2068,6 +2068,14 @@ def backup_delete(request, filename):
 def backup_restore(request, filename):
   """ریستور از فایل بکاپ"""
   if request.method == "POST":
+    import shlex
+    import re
+    
+    # Validate filename - only allow safe characters
+    if not re.match(r'^[a-zA-Z0-9_\-]+\.sql$', filename):
+      messages.error(request, "نام فایل نامعتبر است")
+      return redirect("backup_management")
+    
     filepath = os.path.join(BACKUP_DIR, filename)
     if not os.path.exists(filepath) or ".." in filename:
       messages.error(request, "فایل یافت نشد")
@@ -2082,17 +2090,41 @@ def backup_restore(request, filename):
       db_name = os.getenv("DB_NAME", "educms")
       db_pass = os.getenv("DB_PASSWORD", "")
       
-      # Drop and recreate database, then restore
-      cmd_drop = f'cd /opt/educms && docker compose exec -T -e MYSQL_PWD="{db_pass}" db sh -lc "mysql -uroot -e \'DROP DATABASE IF EXISTS \\`{db_name}\\`; CREATE DATABASE \\`{db_name}\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\'"'
-      subprocess.run(cmd_drop, shell=True, check=True, timeout=60)
+      # Validate db_name
+      if not db_name.replace("_", "").replace("-", "").isalnum():
+        messages.error(request, "نام دیتابیس نامعتبر است")
+        return redirect("backup_management")
       
-      cmd_restore = f'cd /opt/educms && docker compose exec -T -e MYSQL_PWD="{db_pass}" db sh -lc "mysql -uroot {db_name}" < "{filepath}"'
-      result = subprocess.run(cmd_restore, shell=True, capture_output=True, text=True, timeout=300)
+      # Drop and recreate database
+      drop_sql = f"DROP DATABASE IF EXISTS `{db_name}`; CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+      cmd_drop = [
+        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
+        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
+        "mysql", "-uroot", "-e", drop_sql
+      ]
+      subprocess.run(cmd_drop, check=True, timeout=60, cwd="/opt/educms")
+      
+      # Restore from file - read file and pipe to mysql
+      with open(filepath, 'r') as f:
+        sql_content = f.read()
+      
+      cmd_restore = [
+        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
+        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
+        "mysql", "-uroot", db_name
+      ]
+      result = subprocess.run(cmd_restore, input=sql_content, capture_output=True, text=True, timeout=300, cwd="/opt/educms")
       
       if result.returncode == 0:
         messages.success(request, f"ریستور با موفقیت انجام شد از: {filename}")
       else:
-        messages.error(request, f"خطا در ریستور: {result.stderr}")
+        messages.error(request, f"خطا در ریستور: {result.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+      messages.error(request, "عملیات ریستور بیش از حد طول کشید")
+    except Exception as e:
+      import logging
+      logging.getLogger(__name__).error(f"Backup restore error: {e}")
+      messages.error(request, f"خطا: {str(e)[:100]}")
     except Exception as e:
       messages.error(request, f"خطا: {str(e)}")
   
