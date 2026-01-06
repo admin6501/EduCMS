@@ -5894,20 +5894,38 @@ HTML
 </div>
 {% endblock %}
 HTML
-{% endblock %}
-HTML
+
   cat > app/templates/accounts/register.html <<'HTML'
 {% extends "base.html" %}
 {% block title %}ثبت‌نام{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="register-container">
-  <h1 class="text-xl font-bold mb-1">ثبت‌نام</h1>
-  <form method="post" class="space-y-4" data-testid="register-form">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900" data-testid="register-submit-btn">ساخت حساب</button>
-  </form>
-  <div class="mt-2 text-sm text-slate-500 dark:text-slate-300">قبلاً ثبت‌نام کرده‌اید؟ <a class="underline" href="/accounts/login/" data-testid="login-link">ورود</a></div>
+<div class="min-h-[60vh] flex items-center justify-center py-8">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+      </div>
+      <h1 class="text-2xl font-black text-slate-900 dark:text-white">ایجاد حساب کاربری</h1>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">به جمع ما بپیوندید</p>
+    </div>
+    
+    <div class="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900" data-testid="register-container">
+      <form method="post" class="space-y-5" data-testid="register-form">{% csrf_token %}
+        {% include "partials/form_errors.html" %}
+        {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
+        <button type="submit" class="w-full rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3.5 text-white font-bold hover:opacity-95 transition-opacity shadow-lg shadow-emerald-500/25" data-testid="register-submit-btn">
+          ساخت حساب کاربری
+        </button>
+      </form>
+      
+      <div class="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 text-center">
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+          قبلاً ثبت‌نام کرده‌اید؟ 
+          <a class="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline" href="/accounts/login/" data-testid="login-link">وارد شوید</a>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 HTML
