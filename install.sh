@@ -4064,7 +4064,7 @@ def pay_online_wallet(request, gateway_type):
     if amount < 1000:
       messages.error(request, "حداقل مبلغ شارژ ۱۰۰۰ تومان است.")
       return redirect("wallet_topup")
-  except:
+  except (ValueError, TypeError):
     messages.error(request, "مبلغ نامعتبر است.")
     return redirect("wallet_topup")
   
