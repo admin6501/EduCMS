@@ -2353,6 +2353,19 @@ class AdminAliasMiddleware(MiddlewareMixin):
     admin_path=(_get_admin_path() or "admin").strip().strip("/") or "admin"
     ap=admin_path.lower()
     p=(request.path or "/"); pl=p.lower()
+    
+    # Update admin header dynamically based on brand name
+    if pl.startswith("/admin/") or pl.startswith(f"/{ap}/"):
+      try:
+        from .models import SiteSetting
+        s = SiteSetting.objects.first()
+        if s and s.brand_name:
+          admin.site.site_header = f"پنل مدیریت {s.brand_name}"
+        else:
+          admin.site.site_header = "پنل مدیریت سایت"
+      except Exception:
+        admin.site.site_header = "پنل مدیریت سایت"
+    
     # Block access to default /admin/ only if custom admin path is set
     if ap!="admin" and (pl.startswith("/admin/") or pl == "/admin"):
       return HttpResponseNotFound("Not Found")
