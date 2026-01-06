@@ -2911,6 +2911,7 @@ class Course(models.Model):
   cover=models.ImageField(upload_to="courses/covers/", blank=True, null=True)
   summary=models.TextField(blank=True)
   description=models.TextField(blank=True)
+  features=models.TextField(blank=True, verbose_name=_("ویژگی‌های دوره"), help_text=_("هر ویژگی را در یک خط بنویسید"))
   price_toman=models.PositiveIntegerField(default=0)
   is_free_for_all=models.BooleanField(default=False)
   status=models.CharField(max_length=20, choices=PublishStatus.choices, default=PublishStatus.DRAFT)
@@ -2919,6 +2920,12 @@ class Course(models.Model):
   def save(self,*a,**k):
     if not self.slug: self.slug=slugify(self.title, allow_unicode=True)
     return super().save(*a,**k)
+  
+  def get_features_list(self):
+    """تبدیل ویژگی‌ها به لیست"""
+    if not self.features:
+      return []
+    return [f.strip() for f in self.features.strip().split('\n') if f.strip()]
 
   def __str__(self): return self.title
 
