@@ -47,7 +47,6 @@ IFS=$'\n\t'
 
 # ==================== CONSTANTS ====================
 readonly VERSION="2.0.0"
-readonly RELEASE_DATE="مرداد ۱۴۰۴"
 readonly APP_DIR="/opt/educms"
 readonly ENV_FILE="${APP_DIR}/.env"
 readonly BACKUP_DIR="${APP_DIR}/backups"
