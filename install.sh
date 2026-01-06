@@ -2094,17 +2094,23 @@ def admin_path_settings(request):
 @staff_member_required
 def backup_management(request):
   """مدیریت بکاپ و ریستور"""
+  import pytz
+  tehran_tz = pytz.timezone('Asia/Tehran')
+  
   # Get list of backups
   backups = []
   if os.path.exists(BACKUP_DIR):
     sql_files = glob.glob(os.path.join(BACKUP_DIR, "*.sql"))
     for f in sql_files:
       stat = os.stat(f)
+      # Convert timestamp to Tehran timezone
+      utc_dt = datetime.utcfromtimestamp(stat.st_mtime).replace(tzinfo=pytz.UTC)
+      tehran_dt = utc_dt.astimezone(tehran_tz)
       backups.append({
         "name": os.path.basename(f),
         "path": f,
         "size": round(stat.st_size / 1024 / 1024, 2),  # MB
-        "date": datetime.fromtimestamp(stat.st_mtime),
+        "date": tehran_dt,
       })
     backups.sort(key=lambda x: x["date"], reverse=True)
   
