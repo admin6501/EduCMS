@@ -1168,8 +1168,9 @@ def profile_edit(request):
     site_setting = SiteSetting.objects.first()
     if site_setting:
       allow_edit = getattr(site_setting, 'allow_profile_edit', True)
-  except Exception:
-    pass
+  except Exception as e:
+    import logging
+    logging.getLogger(__name__).debug(f"Profile edit setting check error: {e}")
 
   profile, _ = UserProfile.objects.select_related("q1").get_or_create(user=request.user)
 
@@ -1188,8 +1189,10 @@ def profile_edit(request):
         profile.extra_data = extra
         profile.save(update_fields=["extra_data"])
         messages.success(request, "پروفایل بروزرسانی شد.")
-    except Exception:
-      pass
+    except Exception as e:
+      import logging
+      logging.getLogger(__name__).error(f"Profile update error: {e}")
+      messages.error(request, "خطا در بروزرسانی پروفایل.")
     return redirect("profile_edit")
 
   return render(request, "accounts/profile.html", {"form": form, "profile": profile, "allow_edit": True})
@@ -1203,8 +1206,9 @@ def security_questions(request):
     site_setting = SiteSetting.objects.first()
     if site_setting:
       allow_edit = getattr(site_setting, 'allow_security_edit', True)
-  except Exception:
-    pass
+  except Exception as e:
+    import logging
+    logging.getLogger(__name__).debug(f"Security questions setting check error: {e}")
 
   if not allow_edit:
     messages.error(request, "تغییر سوال امنیتی توسط مدیر غیرفعال شده است.")
