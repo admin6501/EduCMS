@@ -2130,6 +2130,7 @@ def backup_create(request):
       backup_file = os.path.join(BACKUP_DIR, f"{db_name}-{ts}.sql")
       
       # Use mysqldump directly (available in the container)
+      # Note: --set-gtid-purged is not supported in MariaDB
       cmd = [
         "mysqldump",
         f"-h{db_host}",
@@ -2140,8 +2141,7 @@ def backup_create(request):
         "--quick",
         "--routines",
         "--triggers",
-        "--events",
-        "--set-gtid-purged=OFF"
+        "--events"
       ]
       
       result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
