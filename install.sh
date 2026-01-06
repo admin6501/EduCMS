@@ -2131,13 +2131,13 @@ def backup_create(request):
       
       # Use mysqldump directly (available in the container)
       # Note: --set-gtid-purged is not supported in MariaDB
-      # --ssl-mode=DISABLED to avoid self-signed certificate issues
+      # --skip-ssl to avoid self-signed certificate issues (MariaDB compatible)
       cmd = [
         "mysqldump",
         f"-h{db_host}",
         "-uroot",
         f"-p{db_pass}",
-        "--ssl-mode=DISABLED",
+        "--skip-ssl",
         "--databases", db_name,
         "--single-transaction",
         "--quick",
