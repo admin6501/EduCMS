@@ -1272,8 +1272,9 @@ def qr_settings(request):
     if site_setting and not site_setting.qr_feature_enabled:
       messages.error(request, "قابلیت QR Code توسط مدیر غیرفعال شده است.")
       return redirect("dashboard_home")
-  except Exception:
-    pass
+  except Exception as e:
+    import logging
+    logging.getLogger(__name__).debug(f"QR settings check error: {e}")
 
   profile, _ = UserProfile.objects.get_or_create(user=request.user)
   
