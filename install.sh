@@ -5673,16 +5673,16 @@ HTML
 {% block content %}
 <div class="mx-auto max-w-4xl space-y-4">
   <!-- Balance Card -->
-  <div class="rounded-2xl border border-slate-200 bg-gradient-to-l from-emerald-50 to-white p-6 dark:border-slate-800 dark:from-emerald-950/30 dark:to-slate-950">
+  <div class="rounded-2xl border border-slate-200 bg-gradient-to-l from-emerald-50 to-white p-6 dark:border-slate-800 dark:from-emerald-950/30 dark:to-slate-950" data-testid="wallet-card">
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div>
         <h1 class="text-xl font-extrabold mb-1">کیف پول</h1>
-        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+        <div class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="wallet-balance-display">
           {{ wallet.balance|default:0 }}
           <span class="text-sm font-normal text-slate-500 dark:text-slate-400">تومان</span>
         </div>
       </div>
-      <a class="rounded-xl bg-emerald-600 px-5 py-2.5 text-white font-semibold hover:bg-emerald-700 transition-colors" href="/wallet/topup/">
+      <a class="rounded-xl bg-emerald-600 px-5 py-2.5 text-white font-semibold hover:bg-emerald-700 transition-colors" href="/wallet/topup/" data-testid="topup-btn">
         + درخواست شارژ
       </a>
     </div>
@@ -5690,14 +5690,14 @@ HTML
 
   <div class="grid gap-4 lg:grid-cols-2">
     <!-- Transactions -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="transactions-section">
       <h2 class="font-bold mb-3">تراکنش‌ها</h2>
       <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
         {% for t in txns %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800" data-testid="transaction-item">
             <div class="flex items-center justify-between">
               <div class="text-slate-600 dark:text-slate-300">{{ t.get_kind_display }}</div>
-              <div class="font-bold {% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}">
+              <div class="font-bold {% if t.amount >= 0 %}text-emerald-600{% else %}text-rose-600{% endif %}" data-testid="transaction-amount">
                 {% if t.amount >= 0 %}+{% endif %}{{ t.amount }} تومان
               </div>
             </div>
@@ -5707,17 +5707,17 @@ HTML
             <div class="text-xs text-slate-400 dark:text-slate-500 mt-1">{{ t.created_at|jalali_datetime }}</div>
           </div>
         {% empty %}
-          <div class="text-slate-500 dark:text-slate-400 text-center py-4">تراکنشی ندارید.</div>
+          <div class="text-slate-500 dark:text-slate-400 text-center py-4" data-testid="no-transactions">تراکنشی ندارید.</div>
         {% endfor %}
       </div>
     </div>
 
     <!-- Top-up Requests -->
-    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950" data-testid="topup-requests-section">
       <h2 class="font-bold mb-3">درخواست‌های شارژ</h2>
       <div class="space-y-2 text-sm max-h-96 overflow-y-auto">
         {% for r in topups %}
-          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800" data-testid="topup-request-item">
             <div class="flex items-center justify-between">
               <div class="font-bold">{{ r.amount }} تومان</div>
               <div class="px-2 py-0.5 rounded-lg text-xs font-medium
