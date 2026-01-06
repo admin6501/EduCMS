@@ -5573,33 +5573,83 @@ HTML
 {% extends "base.html" %}
 {% block title %}دوره‌ها{% endblock %}
 {% block content %}
-<div class="mb-6 flex items-end justify-between gap-4">
-  <div>
-    <h1 class="text-2xl font-extrabold">{{ tpl.home_title|default:"دوره‌های آموزشی" }}</h1>
-    <div class="text-sm text-slate-500 dark:text-slate-300">{{ tpl.home_subtitle|default:"جدیدترین دوره‌ها" }}</div>
+<!-- Hero Header -->
+<div class="relative rounded-3xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 p-8 md:p-12 mb-8 overflow-hidden">
+  <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\"30\" height=\"30\" viewBox=\"0 0 30 30\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cpath d=\"M1.22676 0C1.91374 0 2.45351 0.539773 2.45351 1.22676C2.45351 1.91374 1.91374 2.45351 1.22676 2.45351C0.539773 2.45351 0 1.91374 0 1.22676C0 0.539773 0.539773 0 1.22676 0Z\" fill=\"rgba(255,255,255,0.07)\"%3E%3C/path%3E%3C/svg%3E')] opacity-50"></div>
+  <div class="relative z-10">
+    <h1 class="text-3xl md:text-4xl font-black text-white mb-3">{{ tpl.home_title|default:"دوره‌های آموزشی" }}</h1>
+    <p class="text-white/80 text-lg max-w-2xl">{{ tpl.home_subtitle|default:"با بهترین دوره‌های آموزشی، مهارت‌های جدید یاد بگیرید" }}</p>
   </div>
 </div>
 
-<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+<!-- Courses Grid -->
+<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
   {% for c in object_list %}
-    <a href="/courses/{{ c.slug }}/" class="overflow-hidden rounded-2xl border border-slate-200 bg-white hover:shadow-sm dark:border-slate-800 dark:bg-slate-950">
-      <div class="aspect-[16/9] bg-slate-100 dark:bg-slate-900">
-        {% if c.cover %}<img class="h-full w-full object-cover" src="{{ c.cover.url }}" alt="{{ c.title }}">{% endif %}
+  <a href="/courses/{{ c.slug }}/" class="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900">
+    <!-- Course Image -->
+    <div class="aspect-[16/10] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 overflow-hidden">
+      {% if c.cover %}
+      <img class="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" src="{{ c.cover.url }}" alt="{{ c.title }}">
+      {% else %}
+      <div class="h-full w-full flex items-center justify-center">
+        <svg class="w-16 h-16 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
       </div>
-      <div class="p-4">
-        <div class="font-bold">{{ c.title }}</div>
-        <div class="mt-1 text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ c.summary|default:"—" }}</div>
-        <div class="mt-3 text-sm">
-          {% if c.is_free_for_all or not c.price_toman %}
-            <span class="rounded-xl bg-emerald-600 px-3 py-1 text-white">رایگان</span>
-          {% else %}
-            <span class="rounded-xl bg-slate-900 px-3 py-1 text-white dark:bg-white dark:text-slate-900">{{ c.price_toman }} تومان</span>
-          {% endif %}
+      {% endif %}
+    </div>
+    
+    <!-- Price Badge -->
+    <div class="absolute top-4 left-4">
+      {% if c.is_free_for_all or not c.price_toman %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-sm font-bold text-white shadow-lg">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        رایگان
+      </span>
+      {% else %}
+      <span class="inline-flex items-center rounded-full bg-white/95 backdrop-blur px-3 py-1.5 text-sm font-bold text-slate-900 shadow-lg dark:bg-slate-900/95 dark:text-white">
+        {{ c.price_toman|stringformat:",.0f"|default:c.price_toman }} تومان
+      </span>
+      {% endif %}
+    </div>
+    
+    <!-- Course Info -->
+    <div class="p-5">
+      {% if c.category %}
+      <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-2">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+        {{ c.category.name }}
+      </div>
+      {% endif %}
+      
+      <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1">{{ c.title }}</h3>
+      
+      <p class="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-4">{{ c.summary|default:"برای مشاهده جزئیات کلیک کنید" }}</p>
+      
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+        {% if c.instructor %}
+        <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          </div>
+          <span class="truncate max-w-[100px]">{{ c.instructor }}</span>
         </div>
+        {% endif %}
+        <span class="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
+          مشاهده
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+        </span>
       </div>
-    </a>
+    </div>
+  </a>
   {% empty %}
-    <div class="text-slate-500 dark:text-slate-300">{{ tpl.home_empty|default:"هنوز دوره‌ای منتشر نشده است." }}</div>
+  <div class="col-span-full">
+    <div class="text-center py-16 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+      <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+        <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+      </div>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-2">{{ tpl.home_empty|default:"هنوز دوره‌ای منتشر نشده است" }}</h3>
+      <p class="text-slate-500 dark:text-slate-400">به زودی دوره‌های جدید اضافه خواهند شد</p>
+    </div>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}
