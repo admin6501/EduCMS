@@ -127,8 +127,17 @@ cleanup_old(){
     (cd "$APP_DIR" && docker compose down --remove-orphans --volumes) || true
   fi
   if [[ -d "$APP_DIR" ]]; then
-    echo "Removing old installation..."
+    echo "Removing old installation (preserving backups)..."
+    # Preserve backups folder
+    if [[ -d "$BACKUP_DIR" ]]; then
+      mv "$BACKUP_DIR" /tmp/educms_backups_temp || true
+    fi
     rm -rf "$APP_DIR" || true
+    # Restore backups folder
+    if [[ -d /tmp/educms_backups_temp ]]; then
+      mkdir -p "$APP_DIR"
+      mv /tmp/educms_backups_temp "$BACKUP_DIR" || true
+    fi
   fi
 }
 
