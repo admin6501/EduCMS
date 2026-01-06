@@ -4312,7 +4312,7 @@ def invoice_pdf(request, order_id):
     try:
       reshaped = arabic_reshaper.reshape(str(text))
       return get_display(reshaped)
-    except:
+    except Exception:
       return str(text)
   
   # تابع اعداد فارسی
@@ -4330,7 +4330,7 @@ def invoice_pdf(request, order_id):
     else:
       jdate = jdatetime.datetime.fromgregorian(datetime=tehran_dt)
       date_str = persian_num(f"{jdate.year}/{jdate.month:02d}/{jdate.day:02d}")
-  except:
+  except Exception:
     date_str = str(inv.issued_at.date())
   
   # هدر با گرادیان
