@@ -5841,11 +5841,12 @@ HTML
       </div>
 
       <!-- Course Features -->
-      {% if object.get_features_list %}
+      {% with features=object.get_features_list %}
+      {% if features %}
       <div class="rounded-3xl border border-slate-200/80 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
         <h3 class="font-bold text-slate-900 dark:text-white mb-4">ویژگی‌های دوره</h3>
         <ul class="space-y-3">
-          {% for feature in object.get_features_list %}
+          {% for feature in features %}
           <li class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
             <div class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
@@ -5856,6 +5857,7 @@ HTML
         </ul>
       </div>
       {% endif %}
+      {% endwith %}
     </aside>
   </div>
 </div>
