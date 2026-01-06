@@ -1066,8 +1066,9 @@ class SecurityQuestionsForm(forms.Form):
         try:
             qs = SecurityQuestion.objects.filter(is_active=True).order_by("order", "text")
             self.fields['q1'].queryset = qs
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug(f"Security questions queryset error: {e}")
 
     def clean(self):
         return super().clean()
