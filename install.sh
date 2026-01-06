@@ -2149,7 +2149,7 @@ class AdminAliasMiddleware(MiddlewareMixin):
     return None
 
 class IPSecurityMiddleware(MiddlewareMixin):
-  """Middleware برای بررسی محدودیت IP در پنل ادمین"""
+  """Middleware برای بررسی محدودیت IP در پنل ادمین - نسخه بهینه شده با کش"""
   
   def process_request(self, request):
     # فقط برای صفحات ادمین چک کن
@@ -2161,63 +2161,74 @@ class IPSecurityMiddleware(MiddlewareMixin):
       return None
     
     try:
-      from .models import IPSecuritySetting, IPWhitelist, IPBlacklist
+      from .ip_security import IPSecurityService
       
-      settings = IPSecuritySetting.get_settings()
+      # چک تنظیمات (با کش)
+      settings = IPSecurityService.get_settings()
       if not settings.is_enabled:
         return None
       
-      ip = get_client_ip(request)
+      ip = IPSecurityService.get_client_ip(request)
       
-      # چک whitelist
-      if IPWhitelist.objects.filter(ip_address=ip).exists():
-        return None
+      # چک بلاک بودن (با کش)
+      is_blocked, blocked = IPSecurityService.is_blocked(ip)
       
-      # چک blacklist
-      now = timezone.now()
-      blocked = IPBlacklist.objects.filter(ip_address=ip).first()
-      
-      if blocked:
-        if blocked.is_permanent:
-          return HttpResponseForbidden(self._blocked_response(ip, blocked, permanent=True))
-        elif blocked.expires_at and blocked.expires_at > now:
-          return HttpResponseForbidden(self._blocked_response(ip, blocked))
-        else:
-          # بلاک منقضی شده - حذف
-          blocked.delete()
+      if is_blocked and blocked:
+        return HttpResponseForbidden(self._blocked_response(ip, blocked))
       
       return None
     except Exception:
       return None
   
-  def _blocked_response(self, ip, blocked, permanent=False):
-    from django.utils.html import format_html
-    if permanent:
-      msg = f"""
+  def _blocked_response(self, ip, blocked):
+    """ساخت پاسخ HTML برای IP بلاک شده"""
+    if blocked.is_permanent:
+      return f"""
       <html dir="rtl">
-      <head><meta charset="utf-8"><title>دسترسی مسدود</title></head>
-      <body style="font-family: Tahoma; text-align: center; padding: 50px;">
-        <h1 style="color: #dc2626;">🚫 دسترسی مسدود شد</h1>
-        <p>آدرس IP شما (<code dir="ltr">{ip}</code>) به صورت دائمی مسدود شده است.</p>
-        <p style="color: #666;">دلیل: {blocked.reason or 'نامشخص'}</p>
-        <p>برای رفع مسدودیت با مدیر سایت تماس بگیرید.</p>
+      <head><meta charset="utf-8"><title>دسترسی مسدود</title>
+      <style>
+        body {{ font-family: Tahoma, sans-serif; text-align: center; padding: 50px; background: #fef2f2; }}
+        .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        h1 {{ color: #dc2626; margin-bottom: 20px; }}
+        code {{ background: #f3f4f6; padding: 4px 8px; border-radius: 4px; direction: ltr; }}
+        .reason {{ color: #666; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; }}
+      </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🚫 دسترسی مسدود شد</h1>
+          <p>آدرس IP شما (<code>{ip}</code>) به صورت <strong>دائمی</strong> مسدود شده است.</p>
+          <div class="reason">دلیل: {blocked.reason or 'نامشخص'}</div>
+          <p>برای رفع مسدودیت با مدیر سایت تماس بگیرید.</p>
+        </div>
       </body>
       </html>
       """
     else:
-      msg = f"""
+      expires_str = blocked.expires_at.strftime('%Y-%m-%d %H:%M') if blocked.expires_at else 'نامشخص'
+      return f"""
       <html dir="rtl">
-      <head><meta charset="utf-8"><title>دسترسی موقت مسدود</title></head>
-      <body style="font-family: Tahoma; text-align: center; padding: 50px;">
-        <h1 style="color: #dc2626;">⏳ دسترسی موقتاً مسدود شد</h1>
-        <p>آدرس IP شما (<code dir="ltr">{ip}</code>) به دلیل تلاش‌های ناموفق ورود موقتاً مسدود شده است.</p>
-        <p style="color: #666;">دلیل: {blocked.reason or 'تلاش‌های ناموفق متعدد'}</p>
-        <p>تا زمان: <b>{blocked.expires_at.strftime('%Y-%m-%d %H:%M')}</b></p>
-        <p>لطفاً بعداً تلاش کنید.</p>
+      <head><meta charset="utf-8"><title>دسترسی موقت مسدود</title>
+      <style>
+        body {{ font-family: Tahoma, sans-serif; text-align: center; padding: 50px; background: #fffbeb; }}
+        .container {{ max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+        h1 {{ color: #d97706; margin-bottom: 20px; }}
+        code {{ background: #f3f4f6; padding: 4px 8px; border-radius: 4px; direction: ltr; }}
+        .reason {{ color: #666; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; }}
+        .time {{ font-size: 1.2em; color: #059669; font-weight: bold; }}
+      </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>⏳ دسترسی موقتاً مسدود شد</h1>
+          <p>آدرس IP شما (<code>{ip}</code>) به دلیل تلاش‌های ناموفق ورود موقتاً مسدود شده است.</p>
+          <div class="reason">دلیل: {blocked.reason or 'تلاش‌های ناموفق متعدد'}</div>
+          <p>زمان رفع مسدودیت: <span class="time">{expires_str}</span></p>
+          <p>لطفاً بعداً تلاش کنید.</p>
+        </div>
       </body>
       </html>
       """
-    return msg
 PY
 
   cat > app/settingsapp/ip_security.py <<'PY'
