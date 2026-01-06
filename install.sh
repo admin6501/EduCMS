@@ -293,7 +293,8 @@ write_project(){
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gcc pkg-config gettext locales default-libmysqlclient-dev libmariadb-dev \
+    build-essential gcc pkg-config gettext locales \
+    default-libmysqlclient-dev libmariadb-dev default-mysql-client \
     && sed -i 's/^# *C.UTF-8 UTF-8/C.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
