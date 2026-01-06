@@ -3294,7 +3294,7 @@ def pay_online_order(request, order_id, gateway_type):
     return redirect("checkout", slug=order.course.slug)
   
   amount = order.final_amount
-  callback_url = request.build_absolute_uri(f"/orders/callback/{gateway_type}/")
+  callback_url = get_callback_url(request, f"/orders/callback/{gateway_type}/")
   description = f"خرید دوره: {order.course.title}"
   
   # ایجاد رکورد پرداخت آنلاین
