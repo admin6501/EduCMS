@@ -2229,7 +2229,7 @@ def backup_restore(request, filename):
         f"-h{db_host}",
         "-uroot",
         f"-p{db_pass}",
-        "--ssl-mode=DISABLED",
+        "--skip-ssl",
         "-e", drop_sql
       ]
       subprocess.run(cmd_drop, check=True, timeout=60, capture_output=True)
@@ -2243,7 +2243,7 @@ def backup_restore(request, filename):
         f"-h{db_host}",
         "-uroot",
         f"-p{db_pass}",
-        "--ssl-mode=DISABLED",
+        "--skip-ssl",
         db_name
       ]
       result = subprocess.run(cmd_restore, input=sql_content, capture_output=True, text=True, timeout=300)
