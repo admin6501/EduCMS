@@ -335,7 +335,7 @@ def convert_to_tehran(value):
         else:
             # اگر naive است، فرض می‌کنیم UTC است
             return pytz.utc.localize(value).astimezone(TEHRAN_TZ)
-    except:
+    except Exception:
         return value
 
 def format_gregorian(value, fmt='date'):
