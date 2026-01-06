@@ -7293,12 +7293,12 @@ restore_db(){
   done
   
   echo "Dropping and recreating database..."
-  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot --ssl-mode=DISABLED -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot --skip-ssl -e "DROP DATABASE IF EXISTS \`${DB_NAME}\`; CREATE DATABASE \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null; then
     die "Failed to recreate database"
   fi
   
   echo "Restoring from backup (this may take a while)..."
-  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot --ssl-mode=DISABLED "${DB_NAME}" < "${sql_file}" 2>/dev/null; then
+  if ! docker compose exec -T -e MYSQL_PWD="${DB_PASS}" db mysql -uroot --skip-ssl "${DB_NAME}" < "${sql_file}" 2>/dev/null; then
     die "Restore failed"
   fi
   
