@@ -1819,8 +1819,18 @@ from django.utils import timezone
 from django.contrib import messages
 from .date_utils import smart_format_datetime
 
-# تنظیمات پایه ادمین
-admin.site.site_header = "پنل مدیریت سایت"
+# تنظیمات پایه ادمین - داینامیک از SiteSetting
+def get_admin_header():
+    try:
+        from .models import SiteSetting
+        s = SiteSetting.objects.first()
+        if s and s.brand_name:
+            return f"پنل مدیریت {s.brand_name}"
+    except Exception:
+        pass
+    return "پنل مدیریت سایت"
+
+admin.site.site_header = get_admin_header()
 admin.site.site_title = "پنل مدیریت"
 admin.site.index_title = "خوش آمدید به پنل مدیریت"
 
