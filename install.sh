@@ -2114,11 +2114,12 @@ def backup_create(request):
   """ایجاد بکاپ جدید"""
   if request.method == "POST":
     try:
-      import shlex
+      import MySQLdb
       os.makedirs(BACKUP_DIR, exist_ok=True)
       ts = datetime.now().strftime("%Y%m%d-%H%M%S")
       db_name = os.getenv("DB_NAME", "educms")
       db_pass = os.getenv("DB_PASSWORD", "")
+      db_host = os.getenv("DB_HOST", "db")
       
       # Validate db_name to prevent injection
       if not db_name.replace("_", "").replace("-", "").isalnum():
@@ -2127,23 +2128,35 @@ def backup_create(request):
       
       backup_file = os.path.join(BACKUP_DIR, f"{db_name}-{ts}.sql")
       
-      # Run mysqldump via docker compose - using subprocess.run with list for safety
+      # Use mysqldump directly (available in the container)
       cmd = [
-        "docker", "compose", "-f", "/opt/educms/docker-compose.yml",
-        "exec", "-T", "-e", f"MYSQL_PWD={db_pass}", "db",
-        "sh", "-c", f"mysqldump -uroot --databases {shlex.quote(db_name)} --single-transaction --quick --routines --triggers --events --set-gtid-purged=OFF"
+        "mysqldump",
+        f"-h{db_host}",
+        "-uroot",
+        f"-p{db_pass}",
+        "--databases", db_name,
+        "--single-transaction",
+        "--quick",
+        "--routines",
+        "--triggers",
+        "--events",
+        "--set-gtid-purged=OFF"
       ]
-      result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, cwd="/opt/educms")
       
-      if result.returncode == 0:
+      result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+      
+      if result.returncode == 0 and result.stdout:
         with open(backup_file, "w") as f:
           f.write(result.stdout)
         os.chmod(backup_file, 0o600)
         messages.success(request, f"بکاپ با موفقیت ایجاد شد: {os.path.basename(backup_file)}")
       else:
-        messages.error(request, f"خطا در ایجاد بکاپ: {result.stderr[:200]}")
+        error_msg = result.stderr[:200] if result.stderr else "خروجی خالی"
+        messages.error(request, f"خطا در ایجاد بکاپ: {error_msg}")
     except subprocess.TimeoutExpired:
       messages.error(request, "عملیات بکاپ بیش از حد طول کشید")
+    except FileNotFoundError:
+      messages.error(request, "mysqldump یافت نشد. لطفاً از طریق خط فرمان بکاپ بگیرید.")
     except Exception as e:
       import logging
       logging.getLogger(__name__).error(f"Backup creation error: {e}")
