@@ -6925,15 +6925,34 @@ HTML
 
 {% block nav-global %}
 <style>
-  .admin-quick-nav { display: flex; gap: 8px; padding: 10px 20px; background: #059669; }
-  .admin-quick-nav a { 
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 16px; background: rgba(255,255,255,0.15); 
-    color: white; border-radius: 8px; font-size: 13px; 
-    text-decoration: none; transition: background 0.2s;
+  #header { position: relative; }
+  .admin-quick-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #417690 0%, #2a5a73 100%);
+    border-bottom: 1px solid #205067;
+    margin: 0;
   }
-  .admin-quick-nav a:hover { background: rgba(255,255,255,0.25); }
-  .admin-quick-nav a svg { width: 16px; height: 16px; }
+  .admin-quick-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 12px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .admin-quick-nav a:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.3);
+  }
+  .admin-quick-nav a svg { width: 14px; height: 14px; flex-shrink: 0; }
 </style>
 <div class="admin-quick-nav">
   <a href="/" target="_blank">
