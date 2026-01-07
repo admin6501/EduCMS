@@ -3131,6 +3131,24 @@ class CourseGrantAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = ("user__username", "user__email", "course__title", "reason")
     raw_id_fields = ("user", "course")
+
+
+@admin.register(CourseFeature)
+class CourseFeatureAdmin(admin.ModelAdmin):
+    list_display = ("title", "course", "icon_display", "position")
+    list_filter = ("icon",)
+    search_fields = ("title", "course__title")
+    raw_id_fields = ("course",)
+    ordering = ("course", "position")
+    
+    def icon_display(self, obj):
+        icons = {
+            "check": "✓", "video": "🎬", "mobile": "📱", "support": "🎧",
+            "certificate": "📜", "file": "📄", "clock": "⏰", "users": "👥",
+            "star": "⭐", "book": "📚", "download": "⬇️", "play": "▶️",
+        }
+        return f"{icons.get(obj.icon, '✓')} {obj.get_icon_display()}"
+    icon_display.short_description = "آیکون"
 PY
   cat > app/courses/urls.py <<'PY'
 from django.urls import path
