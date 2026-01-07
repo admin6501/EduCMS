@@ -6866,16 +6866,17 @@ HTML
 HTML
 
   cat > app/templates/settings/admin_path.html <<'HTML'
-{% extends "base.html" %}
+{% extends "admin/base_site.html" %}
 {% block title %}مسیر ادمین{% endblock %}
 {% block content %}
-<div class="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-950">
-  <h1 class="text-xl font-extrabold mb-2">تغییر مسیر ادمین</h1>
-  <div class="text-sm text-slate-500 dark:text-slate-300 mb-4">مسیر فعلی: <b dir="ltr">/{{ current }}/</b></div>
-  <form method="post" class="space-y-4">{% csrf_token %}
-    {% include "partials/form_errors.html" %}
-    {% for field in form %}{% include "partials/field.html" with field=field %}{% endfor %}
-    <button class="rounded-xl bg-slate-900 px-4 py-2 text-white hover:opacity-95 dark:bg-white dark:text-slate-900">ذخیره</button>
+<div style="max-width: 600px; font-family: Vazirmatn, sans-serif;">
+  <h1>تغییر مسیر ادمین</h1>
+  <div style="background: #f8fafc; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;">
+    مسیر فعلی: <b dir="ltr">/{{ current }}/</b>
+  </div>
+  <form method="post">{% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="default" style="margin-top: 10px;">ذخیره</button>
   </form>
 </div>
 {% endblock %}
