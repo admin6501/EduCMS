@@ -7099,7 +7099,7 @@ HTML
       <p class="text-sm text-blue-600 dark:text-blue-400">تغییر نام کاربری و رمز عبور ادمین</p>
     </a>
     
-    <a href="/panel/admin-path/" class="block rounded-2xl border border-purple-200 bg-purple-50 p-6 hover:border-purple-300 hover:shadow-md transition-all dark:border-purple-900 dark:bg-purple-950 dark:hover:border-purple-800">
+    <a href="/admin/path/" class="block rounded-2xl border border-purple-200 bg-purple-50 p-6 hover:border-purple-300 hover:shadow-md transition-all dark:border-purple-900 dark:bg-purple-950 dark:hover:border-purple-800">
       <div class="text-3xl mb-3">🔗</div>
       <h3 class="font-bold text-lg mb-1 text-purple-700 dark:text-purple-300">تغییر مسیر ادمین</h3>
       <p class="text-sm text-purple-600 dark:text-purple-400">تغییر آدرس دسترسی به پنل مدیریت</p>
