@@ -4842,11 +4842,94 @@ class OnlinePaymentAdmin(admin.ModelAdmin):
   created_at_display.short_description = "تاریخ ایجاد"
   created_at_display.admin_order_field = "created_at"
 
-admin.site.register(BankTransferSetting)
-admin.site.register(Coupon)
-admin.site.register(Wallet)
-admin.site.register(WalletTransaction)
-admin.site.register(Invoice)
+# ==================== OTHER PAYMENT MODELS ADMIN ====================
+
+@admin.register(BankTransferSetting)
+class BankTransferSettingAdmin(admin.ModelAdmin):
+  list_display = ("card_number", "account_holder", "sheba", "is_active", "updated_at_display")
+  list_filter = ("is_active",)
+  
+  def updated_at_display(self, obj):
+    return smart_format_datetime(obj.updated_at)
+  updated_at_display.short_description = "آخرین تغییر"
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+  list_display = ("code", "discount_type", "discount_value", "usage_limit", "times_used", "is_active_display", "valid_until")
+  list_filter = ("discount_type", "valid_from", "valid_until")
+  search_fields = ("code",)
+  readonly_fields = ("times_used",)
+  
+  def is_active_display(self, obj):
+    now = timezone.now()
+    if obj.valid_from and now < obj.valid_from:
+      return format_html('<span style="color:orange;">⏳ هنوز شروع نشده</span>')
+    if obj.valid_until and now > obj.valid_until:
+      return format_html('<span style="color:red;">❌ منقضی شده</span>')
+    if obj.usage_limit and obj.times_used >= obj.usage_limit:
+      return format_html('<span style="color:gray;">🚫 تکمیل ظرفیت</span>')
+    return format_html('<span style="color:green;">✅ فعال</span>')
+  is_active_display.short_description = "وضعیت"
+
+@admin.register(Wallet)
+class WalletAdmin(admin.ModelAdmin):
+  list_display = ("user", "balance_display", "updated_at_display")
+  search_fields = ("user__username", "user__email")
+  readonly_fields = ("balance",)
+  
+  def balance_display(self, obj):
+    return f"{obj.balance:,} تومان"
+  balance_display.short_description = "موجودی"
+  
+  def updated_at_display(self, obj):
+    return smart_format_datetime(obj.updated_at)
+  updated_at_display.short_description = "آخرین تغییر"
+
+@admin.register(WalletTransaction)
+class WalletTransactionAdmin(admin.ModelAdmin):
+  list_display = ("id_short", "wallet_user", "kind", "amount_display", "description", "created_at_display")
+  list_filter = ("kind", "created_at")
+  search_fields = ("wallet__user__username", "description")
+  readonly_fields = ("id", "wallet", "kind", "amount", "ref_order", "description", "created_at")
+  
+  def id_short(self, obj):
+    return str(obj.id)[:8] + "..."
+  id_short.short_description = "شناسه"
+  
+  def wallet_user(self, obj):
+    return obj.wallet.user.username
+  wallet_user.short_description = "کاربر"
+  
+  def amount_display(self, obj):
+    color = "green" if obj.amount > 0 else "red"
+    sign = "+" if obj.amount > 0 else ""
+    return format_html('<span style="color:{};">{}{:,}</span>', color, sign, obj.amount)
+  amount_display.short_description = "مبلغ"
+  
+  def created_at_display(self, obj):
+    return smart_format_datetime(obj.created_at)
+  created_at_display.short_description = "تاریخ"
+  created_at_display.admin_order_field = "created_at"
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+  list_display = ("number", "order_user", "item_title", "total_display", "issued_at_display")
+  list_filter = ("issued_at",)
+  search_fields = ("number", "billed_to", "billed_email", "item_title")
+  readonly_fields = ("id", "order", "number", "issued_at")
+  
+  def order_user(self, obj):
+    return obj.order.user.username
+  order_user.short_description = "کاربر"
+  
+  def total_display(self, obj):
+    return f"{obj.total:,} تومان"
+  total_display.short_description = "مبلغ کل"
+  
+  def issued_at_display(self, obj):
+    return smart_format_datetime(obj.issued_at)
+  issued_at_display.short_description = "تاریخ صدور"
+  issued_at_display.admin_order_field = "issued_at"
 PY
 
   cat > app/payments/urls.py <<'PY'
