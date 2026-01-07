@@ -678,12 +678,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from settingsapp.admin_views import admin_account_in_admin
-from settingsapp.views import backup_management, backup_create, backup_download, backup_delete, backup_restore
+from settingsapp.views import backup_management, backup_create, backup_download, backup_delete, backup_restore, admin_path_settings
 from courses.views import CourseListView, CourseDetailView
 from accounts.views import qr_public_profile
 
 urlpatterns = [
   path("admin/account/", admin.site.admin_view(admin_account_in_admin), name="admin_account_in_admin"),
+  path("admin/path/", admin.site.admin_view(admin_path_settings), name="admin_path_in_admin"),
   path("admin/backup/", admin.site.admin_view(backup_management), name="backup_management"),
   path("admin/backup/create/", admin.site.admin_view(backup_create), name="backup_create"),
   path("admin/backup/download/<str:filename>/", admin.site.admin_view(backup_download), name="backup_download"),
