@@ -2929,12 +2929,27 @@ class Course(models.Model):
     verbose_name=_("دوره"); verbose_name_plural=_("دوره‌ها")
 
 
+ICON_CHOICES = [
+  ("check", "✓ تیک (check)"),
+  ("video", "🎬 ویدیو (video)"),
+  ("mobile", "📱 موبایل (mobile)"),
+  ("support", "🎧 پشتیبانی (support)"),
+  ("certificate", "📜 گواهینامه (certificate)"),
+  ("file", "📄 فایل (file)"),
+  ("clock", "⏰ ساعت (clock)"),
+  ("users", "👥 کاربران (users)"),
+  ("star", "⭐ ستاره (star)"),
+  ("book", "📚 کتاب (book)"),
+  ("download", "⬇️ دانلود (download)"),
+  ("play", "▶️ پخش (play)"),
+]
+
 class CourseFeature(models.Model):
   """ویژگی‌های هر دوره"""
   id=models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
   course=models.ForeignKey(Course, on_delete=models.CASCADE, related_name="features", verbose_name=_("دوره"))
   title=models.CharField(max_length=200, verbose_name=_("عنوان ویژگی"))
-  icon=models.CharField(max_length=50, blank=True, default="check", verbose_name=_("آیکون"), help_text=_("نام آیکون: check, video, mobile, support, certificate, file, clock, users"))
+  icon=models.CharField(max_length=50, choices=ICON_CHOICES, default="check", verbose_name=_("آیکون"))
   position=models.PositiveIntegerField(default=0, verbose_name=_("ترتیب"))
 
   class Meta:
