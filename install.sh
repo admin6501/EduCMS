@@ -2121,8 +2121,8 @@ def admin_path_settings(request):
     s.admin_path=form.cleaned_data["admin_path"]; s.save(update_fields=["admin_path"])
     cache.delete("site_admin_path")
     messages.success(request,f"مسیر ادمین تغییر کرد: /{s.admin_path}/")
-    return redirect("admin_path_settings")
-  return render(request,"settings/admin_path.html",{"form":form,"current":s.admin_path})
+    return redirect("admin_path_in_admin")
+  return render(request,"settings/admin_path.html",{"form":form,"current":s.admin_path,"site_settings":s})
 
 @staff_member_required
 def backup_management(request):
