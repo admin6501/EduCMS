@@ -4864,8 +4864,7 @@ class OnlinePaymentAdmin(admin.ModelAdmin):
 
 @admin.register(BankTransferSetting)
 class BankTransferSettingAdmin(admin.ModelAdmin):
-  list_display = ("card_number", "account_holder", "sheba", "is_active", "updated_at_display")
-  list_filter = ("is_active",)
+  list_display = ("card_number", "account_holder", "sheba", "updated_at_display")
   
   def updated_at_display(self, obj):
     return smart_format_datetime(obj.updated_at)
@@ -4873,21 +4872,22 @@ class BankTransferSettingAdmin(admin.ModelAdmin):
 
 @admin.register(Coupon)
 class CouponAdmin(admin.ModelAdmin):
-  list_display = ("code", "discount_type", "discount_value", "usage_limit", "times_used", "is_active_display", "valid_until")
-  list_filter = ("discount_type", "valid_from", "valid_until")
+  list_display = ("code", "type", "value", "is_active", "is_valid_display", "start_at", "end_at")
+  list_filter = ("type", "is_active")
   search_fields = ("code",)
-  readonly_fields = ("times_used",)
   
-  def is_active_display(self, obj):
+  def is_valid_display(self, obj):
+    if obj.is_valid_now():
+      return format_html('<span style="color:green;">✅ معتبر</span>')
+    if not obj.is_active:
+      return format_html('<span style="color:gray;">🚫 غیرفعال</span>')
     now = timezone.now()
-    if obj.valid_from and now < obj.valid_from:
-      return format_html('<span style="color:orange;">⏳ هنوز شروع نشده</span>')
-    if obj.valid_until and now > obj.valid_until:
-      return format_html('<span style="color:red;">❌ منقضی شده</span>')
-    if obj.usage_limit and obj.times_used >= obj.usage_limit:
-      return format_html('<span style="color:gray;">🚫 تکمیل ظرفیت</span>')
-    return format_html('<span style="color:green;">✅ فعال</span>')
-  is_active_display.short_description = "وضعیت"
+    if obj.start_at and now < obj.start_at:
+      return format_html('<span style="color:orange;">⏳ شروع نشده</span>')
+    if obj.end_at and now > obj.end_at:
+      return format_html('<span style="color:red;">❌ منقضی</span>')
+    return format_html('<span style="color:gray;">-</span>')
+  is_valid_display.short_description = "وضعیت"
 
 @admin.register(Wallet)
 class WalletAdmin(admin.ModelAdmin):
